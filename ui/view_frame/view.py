@@ -166,8 +166,11 @@ class Window(QMainWindow):
         self.pts_dialog: PtsDialog | None = None
         self.log_viewer: LogViewerDialog | None = None
         self._fault_message = "无"
-        self._plc_ready = bool(getattr(self.runtime["plc"], "is_connected", lambda: False)())
-        self._vsp_ready = bool(getattr(self.runtime["vsp"], "alive", False))
+        # 表为 None 表示该路在 app.ini 里被关掉了，ready 一律 False，
+        # 底部状态栏会显示“未启用”而不是“离线”，避免把“关掉”当成“断线”。
+        self._plc_ready = bool(getattr(self.runtime.get("plc"), "is_connected", lambda: False)())
+        self._vsp_ready = bool(getattr(self.runtime.get("vsp"), "alive", False))
+        self._can_ready = bool(getattr(self.runtime.get("can"), "alive", False))
         self._ai_ready = False
         self._broker_subscriptions: list[object] = []
         self.runtime["current_user"] = current_user
@@ -246,9 +249,13 @@ class Window(QMainWindow):
         self.plc_status_label.setObjectName("statusStateLabel")
         self._set_status_label_state(self.plc_status_label, False)
 
-        # self.vsp_status_label = QLabel("服务状态: 未知", self.footer)
-        # self.vsp_status_label.setObjectName("statusStateLabel")
-        # self._set_status_label_state(self.vsp_status_label, False)
+        self.vsp_status_label = QLabel("VSP状态: 未知", self.footer)
+        self.vsp_status_label.setObjectName("statusStateLabel")
+        self._set_status_label_state(self.vsp_status_label, False)
+
+        self.can_status_label = QLabel("CAN状态: 未知", self.footer)
+        self.can_status_label.setObjectName("statusStateLabel")
+        self._set_status_label_state(self.can_status_label, False)
 
         # self.ai_status_label = QLabel("AI服务状态: 未知", self.footer)
         # self.ai_status_label.setObjectName("statusStateLabel")
@@ -261,7 +268,8 @@ class Window(QMainWindow):
         self.fault_label.double_clicked.connect(self._open_today_log)
 
         footer_layout.addWidget(self.plc_status_label)
-        # footer_layout.addWidget(self.vsp_status_label)
+        footer_layout.addWidget(self.vsp_status_label)
+        footer_layout.addWidget(self.can_status_label)
         # footer_layout.addWidget(self.ai_status_label)
         footer_layout.addWidget(self.fault_label, 1)
 
@@ -378,7 +386,8 @@ class Window(QMainWindow):
         self.dyn_dims_dialog.activateWindow()
 
     def _open_pts_dialog(self) -> None:
-        if not self._plc_ready:
+        # 现在是点位总表，不再只看 PLC：三路全关才不打开。
+        if self.runtime.get("plc") is None and self.runtime.get("vsp") is None and self.runtime.get("can") is None:
             return
         if self.pts_dialog is None:
             self.pts_dialog = PtsDialog(self)
@@ -410,27 +419,36 @@ class Window(QMainWindow):
         self._fault_message = fault_message or "无"
         self._render_footer_status()
 
-    def update_footer_status(self, *, plc_ready: bool, vsp_ready: bool, fault_message: str) -> None:
+    def update_footer_status(self, *, plc_ready: bool, vsp_ready: bool, fault_message: str, can_ready: bool | None = None) -> None:
         self._plc_ready = plc_ready
-        # self._vsp_ready = vsp_ready
+        self._vsp_ready = vsp_ready
+        if can_ready is not None:
+            self._can_ready = can_ready
         self._fault_message = fault_message or "无"
         self._render_footer_status()
 
     def _render_footer_status(self) -> None:
+        # 表为 None = 该路被关掉，显示“未启用”，不跟“离线”混在一起。
         self._set_status_label_state(self.plc_status_label, self._plc_ready)
-        self.plc_status_label.setText("PLC在线" if self._plc_ready else "PLC离线")
-        # self.plc_dialog_button.setEnabled(self._plc_ready)
-
-        # self._set_status_label_state(self.vsp_status_label, self._vsp_ready)
-        # self.dyn_dims_button.setEnabled(self._vsp_ready)
-        # self.vsp_status_label.setText("传感器在线" if self._vsp_ready else "传感器离线")
+        self.plc_status_label.setText(
+            "PLC未启用" if self.runtime.get("plc") is None else ("PLC在线" if self._plc_ready else "PLC离线")
+        )
+        self._set_status_label_state(self.vsp_status_label, self._vsp_ready)
+        self.vsp_status_label.setText(
+            "VSP未启用" if self.runtime.get("vsp") is None else ("VSP在线" if self._vsp_ready else "VSP离线")
+        )
+        self._set_status_label_state(self.can_status_label, self._can_ready)
+        self.can_status_label.setText(
+            "CAN未启用" if self.runtime.get("can") is None else ("CAN在线" if self._can_ready else "CAN离线")
+        )
 
         # self.ai_status_label.setText("AI服务在线" if self._ai_ready else "AI服务离线")
         self.fault_label.setText(f"故障信息: {self._fault_message}")
 
     def _refresh_runtime_status(self) -> None:
-        self._plc_ready = bool(getattr(self.runtime["plc"], "is_connected", lambda: False)())
-        # self._vsp_ready = bool(getattr(self.runtime["vsp"], "alive", False))
+        self._plc_ready = bool(getattr(self.runtime.get("plc"), "is_connected", lambda: False)())
+        self._vsp_ready = bool(getattr(self.runtime.get("vsp"), "alive", False))
+        self._can_ready = bool(getattr(self.runtime.get("can"), "alive", False))
         # self._refresh_ai_status(render=False)
         self._render_footer_status()
 
@@ -445,7 +463,8 @@ class Window(QMainWindow):
             return
         self._broker_subscriptions = [
             broker.subscribe("plc_poll", self._on_plc_poll),
-            # broker.subscribe("vsp_poll", self._on_vsp_poll),
+            broker.subscribe("vsp_poll", self._on_vsp_poll),
+            broker.subscribe("can_poll", self._on_can_poll),
             broker.subscribe("pt_error", self._on_pt_error),
             broker.subscribe("node_wait", self._on_node_wait),
             broker.subscribe("msg_guard", self._on_guard_check),
@@ -466,6 +485,9 @@ class Window(QMainWindow):
 
     def _on_vsp_poll(self, **payload) -> None:
         self.runtime_event.emit({"topic": "vsp_poll", **payload})
+
+    def _on_can_poll(self, **payload) -> None:
+        self.runtime_event.emit({"topic": "can_poll", **payload})
 
     def _on_pt_error(self, **payload) -> None:
         self.runtime_event.emit({"topic": "pt_error", **payload})
@@ -488,6 +510,9 @@ class Window(QMainWindow):
         elif topic == "vsp_poll":
             self._vsp_ready = bool(payload.get("alive"))
 
+        elif topic == "can_poll":
+            self._can_ready = bool(payload.get("alive"))
+
 
         elif topic == "pt_error":
             pt_name = str(payload.get("pt_name") or "").strip()
@@ -501,7 +526,9 @@ class Window(QMainWindow):
             for risk in risks:
                 logger.warning(f"安全风险[{risk.name}][{risk.level}]:{risk.message}")
                 if risk.level=="HIGH":
-                    self.runtime.get("plc")._emc_stop()
+                    plc = self.runtime.get("plc")
+                    if plc is not None:
+                        plc._emc_stop()
 
         elif topic == "switch_tab":
             tab_id = payload.get("tab")

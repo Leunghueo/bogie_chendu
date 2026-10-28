@@ -15,7 +15,7 @@ for import_path in (BASE_DIR, BASE_DIR / "libs"):
 
 from PySide6.QtWidgets import QApplication, QDialog
 
-from _runtime import get_runtime, update_runtime
+from _runtime import get_runtime, source_enabled, update_runtime
 from logger import configure_application_logging
 from ui.theme import apply_theme
 from ui.registry import load_ui_registry
@@ -43,20 +43,37 @@ def _load_runtime() -> dict[str, object]:
     _rt = get_runtime()
     broker = create_broker()
     sim=_rt['sim']=='true'
-    if _rt["config"].getboolean("plc", "used"):
+    # 总开关：app.ini 里 enable=false 的路不创建点表、不启动轮询线程，
+    # runtime 里对应项为 None，后续 _stop_pollers / dialog_pts / 状态栏都会跳过它。
+    # 先把三张表都置 None，避免旧写法里“禁用时变量未定义、靠条件表达式短路”
+    # 这种脆弱写法；三路互不干扰，一路关掉不影响另外两路加载和轮询。
+    plc_table = None
+    vsp_table = None
+    can_table = None
+    plc_enabled = source_enabled(_rt["config"], "plc")
+    vsp_enabled = source_enabled(_rt["config"], "vsp")
+    can_enabled = source_enabled(_rt["config"], "can")
+
+    if plc_enabled:
         plc_table = load_pt(str(_rt["paths"]["plc_config"]),sim=sim)
         plc_table.broker = broker
         plc_table.start_polling()
+    else:
+        logger.info("PLC 未启用 (app.ini [plc] enable = false)，不启动 PLC 轮询")
 
-    if _rt["config"].getboolean("vsp", "used"):
+    if vsp_enabled:
         vsp_table = load_vsp(str(_rt["paths"]["vsp_config"]),sim=sim)
         vsp_table.broker = broker
         vsp_table.start()
+    else:
+        logger.info("VSP 未启用 (app.ini [vsp] enable = false)，不启动 VSP 轮询")
 
-    if _rt["config"].getboolean("can", "used"):
+    if can_enabled:
         can_table = load_can(str(_rt["paths"]["can_config"]),sim=sim)
         can_table.broker = broker
         can_table.start()
+    else:
+        logger.info("CAN 未启用 (app.ini [can] enable = false)，不启动 CAN 轮询")
 
     workflow = None
     ui_registry = load_ui_registry()
@@ -79,14 +96,14 @@ def _load_runtime() -> dict[str, object]:
     runtime = update_runtime(
         broker_lib=broker_lib,
 
-        plc_lib = plc_lib if _rt["config"].getboolean("plc", "used") else None,
-        plc = plc_table if _rt["config"].getboolean("plc", "used") else None,
+        plc_lib = plc_lib if plc_enabled else None,
+        plc = plc_table,
 
-        vsp_lib=vsp_lib if _rt["config"].getboolean("vsp", "used") else None,
-        vsp=vsp_table  if _rt["config"].getboolean("vsp", "used") else None,
+        vsp_lib=vsp_lib if vsp_enabled else None,
+        vsp=vsp_table,
 
-        can_lib=can_lib if _rt["config"].getboolean("can", "used") else None,
-        can=can_table  if _rt["config"].getboolean("can", "used") else None,
+        can_lib=can_lib if can_enabled else None,
+        can=can_table,
 
         wf_lib=wf_lib,
         pdf_lib=pdf_lib,

@@ -28,15 +28,29 @@ BASE_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False
 config = configparser.ConfigParser()
 config.read(BASE_DIR / "app.ini", encoding="utf-8")
 
+
+def source_enabled(config: configparser.ConfigParser, section: str) -> bool:
+    """plc/vsp/can 的总开关：app.ini 里 enable 优先，兼容旧的 used。
+
+    两个字段都没有时默认开启（保持旧行为）；enable=false 时 main
+    不创建该路的点表、也不启动轮询线程，runtime 里对应项为 None。
+    """
+    if config.has_option(section, "enable"):
+        return config.getboolean(section, "enable")
+    if config.has_option(section, "used"):
+        return config.getboolean(section, "used")
+    return True
+
+
 sim = config.get("sim", "enable")
 
-plc_used = config.get("plc", "used")
+plc_used = source_enabled(config, "plc")
 plc_config_path = BASE_DIR /  config.get("plc", "path")
 
-vsp_used = BASE_DIR / config.get("vsp", "used")
+vsp_used = source_enabled(config, "vsp")
 vsp_config_path = BASE_DIR /  config.get("vsp", "path")
 
-can_used = config.get("can", "used")
+can_used = source_enabled(config, "can")
 can_config_path = BASE_DIR /  config.get("can", "path")
 
 flow_template_dir = BASE_DIR /  config.get("flow", "path")
