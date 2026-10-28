@@ -1,0 +1,1445 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1239</width>
+    <height>836</height>
+   </rect>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout" stretch="0">
+   <property name="topMargin">
+    <number>9</number>
+   </property>
+   <item>
+    <widget class="QWidget" name="widget" native="true">
+     <layout class="QHBoxLayout" name="horizontalLayout" stretch="0">
+      <item>
+       <widget class="QWidget" name="widget_2" native="true">
+        <property name="minimumSize">
+         <size>
+          <width>1100</width>
+          <height>800</height>
+         </size>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">QLabel{
+    padding: 1px;
+    background: rgb(0, 0, 255);
+    border: 1px solid #16364b;
+	color: rgb(255, 255, 255);
+	font: 9pt &quot;Microsoft YaHei UI&quot;;
+}
+
+QPushButton {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0f8fbe, stop:1 #41b7dc);
+    color: #ffffff;
+    font-weight: 600;
+    border: 1px solid #7bcbe7;
+    border-radius: 3px;
+    padding: 2px;
+}</string>
+        </property>
+        <widget class="QLabel" name="lb_bg">
+         <property name="geometry">
+          <rect>
+           <x>125</x>
+           <y>111</y>
+           <width>1001</width>
+           <height>591</height>
+          </rect>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">border-color: rgb(255, 255, 255);</string>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+         <property name="pixmap">
+          <pixmap>../../runtime/res/image/dim.png</pixmap>
+         </property>
+         <property name="scaledContents">
+          <bool>true</bool>
+         </property>
+        </widget>
+        <widget class="QLabel" name="bench4_x">
+         <property name="geometry">
+          <rect>
+           <x>290</x>
+           <y>223</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 85, 0);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="bench4_y">
+         <property name="geometry">
+          <rect>
+           <x>430</x>
+           <y>224</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 85, 0);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="l24_cal">
+         <property name="geometry">
+          <rect>
+           <x>579</x>
+           <y>224</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color:  rgb(186, 0, 0);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="bench2_x">
+         <property name="geometry">
+          <rect>
+           <x>868</x>
+           <y>227</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 85, 0);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="bench2_y">
+         <property name="geometry">
+          <rect>
+           <x>730</x>
+           <y>226</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 85, 0);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="w34_cal">
+         <property name="geometry">
+          <rect>
+           <x>450</x>
+           <y>400</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(186, 0, 0);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="w12_cal">
+         <property name="geometry">
+          <rect>
+           <x>700</x>
+           <y>400</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(186, 0, 0);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="bench3_y">
+         <property name="geometry">
+          <rect>
+           <x>427</x>
+           <y>589</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 85, 0);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="bench3_x">
+         <property name="geometry">
+          <rect>
+           <x>290</x>
+           <y>590</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 85, 0);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="bench1_x">
+         <property name="geometry">
+          <rect>
+           <x>863</x>
+           <y>590</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 85, 0);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="bench1_y">
+         <property name="geometry">
+          <rect>
+           <x>717</x>
+           <y>589</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 85, 0);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="l13_cal">
+         <property name="geometry">
+          <rect>
+           <x>580</x>
+           <y>574</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(186, 0, 0);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_36_cal">
+         <property name="geometry">
+          <rect>
+           <x>589</x>
+           <y>204</y>
+           <width>51</width>
+           <height>20</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background-color: transparent;
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>24轴距</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_40_cal">
+         <property name="geometry">
+          <rect>
+           <x>460</x>
+           <y>380</y>
+           <width>61</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background: rgb(255, 255, 255);
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>34轮距</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_41_cal">
+         <property name="geometry">
+          <rect>
+           <x>710</x>
+           <y>380</y>
+           <width>61</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background: rgb(255, 255, 255);
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>12轮距</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_46_cal">
+         <property name="geometry">
+          <rect>
+           <x>588</x>
+           <y>555</y>
+           <width>51</width>
+           <height>20</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background-color: transparent;
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>13轴距</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_44">
+         <property name="geometry">
+          <rect>
+           <x>422</x>
+           <y>207</y>
+           <width>88</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>88</width>
+           <height>16</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>88</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="font">
+          <font>
+           <family>Microsoft YaHei UI</family>
+           <pointsize>9</pointsize>
+           <italic>false</italic>
+           <bold>false</bold>
+          </font>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background-color: transparent;
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>称重台X位移4</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="bench4_w">
+         <property name="geometry">
+          <rect>
+           <x>290</x>
+           <y>290</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 85, 0);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_47">
+         <property name="geometry">
+          <rect>
+           <x>225</x>
+           <y>290</y>
+           <width>61</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background: rgb(255, 255, 255);
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>轮重测量4</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_48">
+         <property name="geometry">
+          <rect>
+           <x>940</x>
+           <y>290</y>
+           <width>81</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background: rgb(255, 255, 255);
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>轮重测量2</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="bench2_w">
+         <property name="geometry">
+          <rect>
+           <x>865</x>
+           <y>292</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 85, 0);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_51">
+         <property name="geometry">
+          <rect>
+           <x>225</x>
+           <y>509</y>
+           <width>61</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background: rgb(255, 255, 255);
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>轮重测量3</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="bench3_w">
+         <property name="geometry">
+          <rect>
+           <x>290</x>
+           <y>509</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 85, 0);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_52">
+         <property name="geometry">
+          <rect>
+           <x>946</x>
+           <y>507</y>
+           <width>61</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background: rgb(255, 255, 255);
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>轮重测量1</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="bench1_w">
+         <property name="geometry">
+          <rect>
+           <x>866</x>
+           <y>509</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 85, 0);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_58">
+         <property name="geometry">
+          <rect>
+           <x>860</x>
+           <y>208</y>
+           <width>91</width>
+           <height>18</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <family>Microsoft YaHei UI</family>
+           <pointsize>9</pointsize>
+           <italic>false</italic>
+           <bold>false</bold>
+          </font>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background-color: transparent;
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>车轮内侧距2</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_59">
+         <property name="geometry">
+          <rect>
+           <x>860</x>
+           <y>570</y>
+           <width>81</width>
+           <height>18</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <family>Microsoft YaHei UI</family>
+           <pointsize>9</pointsize>
+           <italic>false</italic>
+           <bold>false</bold>
+          </font>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background-color: transparent;
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>车轮内侧距1</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_60">
+         <property name="geometry">
+          <rect>
+           <x>290</x>
+           <y>570</y>
+           <width>71</width>
+           <height>18</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <family>Microsoft YaHei UI</family>
+           <pointsize>9</pointsize>
+           <italic>false</italic>
+           <bold>false</bold>
+          </font>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background-color: transparent;
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>车轮内侧距3</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_49">
+         <property name="geometry">
+          <rect>
+           <x>420</x>
+           <y>570</y>
+           <width>88</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>88</width>
+           <height>16</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>88</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="font">
+          <font>
+           <family>Microsoft YaHei UI</family>
+           <pointsize>9</pointsize>
+           <italic>false</italic>
+           <bold>false</bold>
+          </font>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background-color: transparent;
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>称重台X位移3</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_50">
+         <property name="geometry">
+          <rect>
+           <x>720</x>
+           <y>207</y>
+           <width>88</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>88</width>
+           <height>16</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>88</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="font">
+          <font>
+           <family>Microsoft YaHei UI</family>
+           <pointsize>9</pointsize>
+           <italic>false</italic>
+           <bold>false</bold>
+          </font>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background-color: transparent;
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>称重台X位移2</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_55">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="geometry">
+          <rect>
+           <x>710</x>
+           <y>570</y>
+           <width>88</width>
+           <height>18</height>
+          </rect>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>88</width>
+           <height>18</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>88</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="font">
+          <font>
+           <family>Microsoft YaHei UI</family>
+           <pointsize>9</pointsize>
+           <italic>false</italic>
+           <bold>false</bold>
+          </font>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background-color: transparent;
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>称重台X位移1</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_45">
+         <property name="geometry">
+          <rect>
+           <x>290</x>
+           <y>206</y>
+           <width>91</width>
+           <height>18</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <family>Microsoft YaHei UI</family>
+           <pointsize>9</pointsize>
+           <italic>false</italic>
+           <bold>false</bold>
+          </font>
+         </property>
+         <property name="whatsThis">
+          <string>sensor</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background-color: transparent;
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>车轮内侧距4</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="hang2_cal">
+         <property name="geometry">
+          <rect>
+           <x>580</x>
+           <y>370</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color:  rgb(186, 0, 0);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_63_cal">
+         <property name="geometry">
+          <rect>
+           <x>557</x>
+           <y>351</y>
+           <width>111</width>
+           <height>20</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background-color: transparent;
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>2位二系选悬挂高度</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="hang1_cal">
+         <property name="geometry">
+          <rect>
+           <x>580</x>
+           <y>450</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color:  rgb(186, 0, 0);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_65_cal">
+         <property name="geometry">
+          <rect>
+           <x>557</x>
+           <y>431</y>
+           <width>111</width>
+           <height>20</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background-color: transparent;
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>1位二系选悬挂高度</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="bench3_dw_cal">
+         <property name="geometry">
+          <rect>
+           <x>290</x>
+           <y>489</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(0, 85, 127);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_63_cal_2">
+         <property name="geometry">
+          <rect>
+           <x>231</x>
+           <y>487</y>
+           <width>51</width>
+           <height>20</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background: rgb(255, 255, 255);
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>轮重差3</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="bench4_dw_cal">
+         <property name="geometry">
+          <rect>
+           <x>290</x>
+           <y>310</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(0, 85, 127);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_63_cal_3">
+         <property name="geometry">
+          <rect>
+           <x>230</x>
+           <y>310</y>
+           <width>51</width>
+           <height>20</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background: rgb(255, 255, 255);
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>轮重差4</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="bench2_dw_cal">
+         <property name="geometry">
+          <rect>
+           <x>865</x>
+           <y>312</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(0, 85, 127);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_63_cal_4">
+         <property name="geometry">
+          <rect>
+           <x>944</x>
+           <y>310</y>
+           <width>51</width>
+           <height>20</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background: rgb(255, 255, 255);
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>轮重差2</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="bench1_dw_cal">
+         <property name="geometry">
+          <rect>
+           <x>868</x>
+           <y>489</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(0, 85, 127);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_63_cal_5">
+         <property name="geometry">
+          <rect>
+           <x>948</x>
+           <y>487</y>
+           <width>51</width>
+           <height>20</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background: rgb(255, 255, 255);
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>轮重差1</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="axis12_w_cal">
+         <property name="geometry">
+          <rect>
+           <x>866</x>
+           <y>400</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(0, 85, 127);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_63_cal_6">
+         <property name="geometry">
+          <rect>
+           <x>941</x>
+           <y>398</y>
+           <width>51</width>
+           <height>20</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background: rgb(255, 255, 255);
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>12轴重</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="axis34_w_cal">
+         <property name="geometry">
+          <rect>
+           <x>290</x>
+           <y>390</y>
+           <width>71</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(0, 85, 127);</string>
+         </property>
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_63_cal_7">
+         <property name="geometry">
+          <rect>
+           <x>240</x>
+           <y>390</y>
+           <width>41</width>
+           <height>20</height>
+          </rect>
+         </property>
+         <property name="whatsThis">
+          <string>caled</string>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background: rgb(255, 255, 255);
+    border: none;
+	color: rgb(0, 0, 0);
+}</string>
+         </property>
+         <property name="text">
+          <string>34轴重</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="tag_1">
+         <property name="geometry">
+          <rect>
+           <x>1020</x>
+           <y>550</y>
+           <width>71</width>
+           <height>71</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <family>Adobe Fan Heiti Std</family>
+           <pointsize>36</pointsize>
+           <italic>false</italic>
+           <fontweight>Thin</fontweight>
+          </font>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background: rgb(255, 255, 255);
+    border: none;
+	color: rgb(0, 0, 0);
+	font: 100 36pt &quot;Adobe Fan Heiti Std&quot;;
+}</string>
+         </property>
+         <property name="text">
+          <string>①</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="tag_2">
+         <property name="geometry">
+          <rect>
+           <x>1020</x>
+           <y>190</y>
+           <width>71</width>
+           <height>71</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <family>Adobe Fan Heiti Std</family>
+           <pointsize>36</pointsize>
+           <italic>false</italic>
+           <fontweight>Thin</fontweight>
+          </font>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background: rgb(255, 255, 255);
+    border: none;
+	color: rgb(0, 0, 0);
+	font: 100 36pt &quot;Adobe Fan Heiti Std&quot;;
+}</string>
+         </property>
+         <property name="text">
+          <string>②</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="tag_3">
+         <property name="geometry">
+          <rect>
+           <x>140</x>
+           <y>550</y>
+           <width>71</width>
+           <height>71</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <family>Adobe Fan Heiti Std</family>
+           <pointsize>36</pointsize>
+           <italic>false</italic>
+           <fontweight>Thin</fontweight>
+          </font>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background: rgb(255, 255, 255);
+    border: none;
+	color: rgb(0, 0, 0);
+	font: 100 36pt &quot;Adobe Fan Heiti Std&quot;;
+}</string>
+         </property>
+         <property name="text">
+          <string>③</string>
+         </property>
+        </widget>
+        <widget class="QLabel" name="tag_4">
+         <property name="geometry">
+          <rect>
+           <x>140</x>
+           <y>190</y>
+           <width>71</width>
+           <height>71</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <family>Adobe Fan Heiti Std</family>
+           <pointsize>36</pointsize>
+           <italic>false</italic>
+           <fontweight>Thin</fontweight>
+          </font>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background: rgb(255, 255, 255);
+    border: none;
+	color: rgb(0, 0, 0);
+	font: 100 36pt &quot;Adobe Fan Heiti Std&quot;;
+}</string>
+         </property>
+         <property name="text">
+          <string>④</string>
+         </property>
+        </widget>
+        <widget class="QPushButton" name="btn_zero_l12">
+         <property name="geometry">
+          <rect>
+           <x>570</x>
+           <y>660</y>
+           <width>81</width>
+           <height>31</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>1-3零点校准</string>
+         </property>
+        </widget>
+        <widget class="QPushButton" name="btn_zero_l24">
+         <property name="geometry">
+          <rect>
+           <x>570</x>
+           <y>130</y>
+           <width>81</width>
+           <height>31</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>2-4零点校准</string>
+         </property>
+        </widget>
+        <widget class="QPushButton" name="btn_zero_l34">
+         <property name="geometry">
+          <rect>
+           <x>277</x>
+           <y>159</y>
+           <width>101</width>
+           <height>31</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>4号内测距校准</string>
+         </property>
+        </widget>
+        <widget class="QPushButton" name="btn_zero_l34_2">
+         <property name="geometry">
+          <rect>
+           <x>280</x>
+           <y>630</y>
+           <width>101</width>
+           <height>31</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>3号内测距校准</string>
+         </property>
+        </widget>
+        <widget class="QPushButton" name="btn_zero_l34_3">
+         <property name="geometry">
+          <rect>
+           <x>850</x>
+           <y>630</y>
+           <width>101</width>
+           <height>31</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>1号内测距校准</string>
+         </property>
+        </widget>
+        <widget class="QPushButton" name="btn_zero_l34_4">
+         <property name="geometry">
+          <rect>
+           <x>849</x>
+           <y>156</y>
+           <width>101</width>
+           <height>31</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>2号内测距校准</string>
+         </property>
+        </widget>
+        <widget class="QRadioButton" name="rd_sensor">
+         <property name="geometry">
+          <rect>
+           <x>130</x>
+           <y>80</y>
+           <width>111</width>
+           <height>20</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>显示传感器</string>
+         </property>
+        </widget>
+        <widget class="QRadioButton" name="rd_cal">
+         <property name="geometry">
+          <rect>
+           <x>250</x>
+           <y>80</y>
+           <width>121</width>
+           <height>20</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>显示计算结果</string>
+         </property>
+        </widget>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

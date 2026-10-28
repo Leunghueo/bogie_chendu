@@ -1,0 +1,2421 @@
+{
+  "config": {
+    "ip": "192.168.1.11",
+    "ip_sim": "192.168.56.1",
+    "port": 502,
+    "slave_id": 1,
+    "protocol": "modbus-tcp",
+    "timeout_ms": 1000,
+    "reconnect_interval_ms": 3000,
+    "poll_interval_ms": 500,
+    "wait_before_watch": 500
+  },
+  "pts": {
+    "加载压力1": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "0",
+      "add": 0.0,
+      "segs": [
+        "4000@0",
+        "4293@7.6",
+        "20000@274.6"
+      ],
+      "unit": "kN",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "加载压力2": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "1",
+      "add": 0.0,
+      "segs": [
+        "4000@0",
+        "4291@7.6",
+        "20000@276.6"
+      ],
+      "unit": "kN",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "加载头垂向位移1": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "2",
+      "add": 0.0,
+      "segs": [
+        "4000@0",
+        "20000@845"
+      ],
+      "unit": "mm",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "加载头垂向位移2": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "3",
+      "add": 0.0,
+      "segs": [
+        "4000@0",
+        "20000@845"
+      ],
+      "unit": "mm",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "气压采集1": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "4",
+      "add": 0.0,
+      "segs": [
+        "0@0",
+        "10000@1000"
+      ],
+      "unit": "kPa",
+      "desc": "0-10000",
+      "show": true
+    },
+    "气压采集2": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "5",
+      "add": 0.0,
+      "segs": [
+        "0@0",
+        "10000@1000"
+      ],
+      "unit": "kPa",
+      "desc": "0-10000",
+      "show": true
+    },
+    "气压采集3": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "6",
+      "add": 0.0,
+      "segs": [],
+      "unit": "kPa",
+      "desc": "0-10000",
+      "show": false
+    },
+    "气压采集4": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "7",
+      "add": 0.0,
+      "segs": [],
+      "unit": "kPa",
+      "desc": "0-10000",
+      "show": false
+    },
+    "液压系统压力": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "8",
+      "add": 0.0,
+      "segs": [
+        "4000@0",
+        "20000@27"
+      ],
+      "unit": "MPa",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "加载头横向位移1": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "9",
+      "add": 0.0,
+      "segs": [],
+      "unit": "mm",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "加载头横向位移2": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "10",
+      "add": 0.0,
+      "segs": [],
+      "unit": "mm",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "液压油温": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "11",
+      "add": 0.0,
+      "segs": [
+        "-500@-50",
+        "1500@150"
+      ],
+      "unit": "C",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "称重台X位移1": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "12",
+      "add": -1.0,
+      "segs": [
+        "4000@0",
+        "20000@300"
+      ],
+      "unit": "mm",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "称重台X位移2": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "13",
+      "add": 5.0,
+      "segs": [
+        "4000@0",
+        "20000@300"
+      ],
+      "unit": "mm",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "称重台X位移3": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "14",
+      "add": 1.0,
+      "segs": [
+        "4000@0",
+        "20000@300"
+      ],
+      "unit": "mm",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "称重台X位移4": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "15",
+      "add": -5.0,
+      "segs": [
+        "4000@0",
+        "20000@300"
+      ],
+      "unit": "mm",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "车轮内侧距1": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "16",
+      "add": 0.0,
+      "segs": [
+        "4000@60",
+        "20000@180"
+      ],
+      "unit": "mm",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "车轮内侧距2": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "17",
+      "add": 0.0,
+      "segs": [
+        "4000@60",
+        "20000@182.7"
+      ],
+      "unit": "mm",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "车轮内侧距3": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "18",
+      "add": 0.0,
+      "segs": [
+        "4000@60",
+        "20000@181.44"
+      ],
+      "unit": "mm",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "车轮内侧距4": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "19",
+      "add": 0.0,
+      "segs": [
+        "4000@60",
+        "20000@182.16"
+      ],
+      "unit": "mm",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "轮重测量1": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "20",
+      "add": 0.0,
+      "segs": [
+        "0@0",
+        "15000@129.982"
+      ],
+      "unit": "t",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "轮重测量2": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "21",
+      "add": 0.0,
+      "segs": [
+        "0@0",
+        "648@5.615"
+      ],
+      "unit": "t",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "轮重测量3": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "22",
+      "add": 0.0,
+      "segs": [
+        "0@0",
+        "585@5.05"
+      ],
+      "unit": "t",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "轮重测量4": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "23",
+      "add": 0.0,
+      "segs": [
+        "0@0",
+        "2477@21.343"
+      ],
+      "unit": "t",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "开始试验@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "25.0",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "降下转向架@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "25.01",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "确认转向架中心@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "25.02",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "选择命令@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "25.03",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "启动液压系统@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "25.04",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "建立液压系统工作压力@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "25.05",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "快进信息@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "25.06",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "快进加载装置@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "25.07",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "确认加载位置@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "25.08",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "力贴合加载@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "25.09",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "力工进@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "25.11",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "加载延时@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "25.12",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "计算@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "25.13",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "力工退@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "25.14",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "快退加载装置@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "26.0",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "停止液压系统@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "26.01",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "升起转向架@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "26.02",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "位移贴合加载@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "26.03",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "位移工进@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "26.05",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "空气弹簧充气@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "26.06",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "保压@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "26.07",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "差压阀试验1>2@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "26.08",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "差压阀试验2>1@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "26.09",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "空气弹簧放气@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "26.10",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "位移工退@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "26.11",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "制动单元动作试验@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "26.12",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "停放制动管路气密性试验开始@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "26.13",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "行车制动管路气密性试验开始@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "26.14",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "轮缘润滑管理气密性试验开始@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "26.15",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "停放制动管路气密性试验结束@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "27.0",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "行车制动管路气密性试验结束@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "27.01",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "轮缘润滑管理气密性试验结束@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "27.02",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "制动单元试验@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "27.03",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "停放制动软管充气@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "27.04",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "行车制动软管充气@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "27.05",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "施行缓解@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "27.06",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "停放管路释放@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "27.07",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "?停放制动软管充气@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "27.08",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "?停放管路释放@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "27.09",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "缓解@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "27.10",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "试验结束@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "27.11",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "空气弹簧1气路自检开始@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "27.12",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "空气弹簧2气路自检开始@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "27.13",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "空气弹簧1气路自检结束@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "27.14",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "空气弹簧2气路自检结束@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "27.15",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "停止试验@完成": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "28.0",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "伺服故障": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "28.04",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": false
+    },
+    "伺服网络故障": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "28.05",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": false
+    },
+    "1位称重台横向移动完成信号": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "28.06",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "2位称重台横向移动完成信号": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "28.07",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "3位称重台横向移动完成信号": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "28.08",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "4位称重台横向移动完成信号": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "28.09",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "1位称重台纵向移动完成信号": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "28.10",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "2位称重台纵向移动完成信号": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "28.11",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "3位称重台纵向移动完成信号": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "28.12",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "4位称重台纵向移动完成信号": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "28.13",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "加载头横向移动完成信号": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "28.14",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "引导轨上限位": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "29.0",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "引导轨下限位": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "29.01",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "引导轨电源合闸": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "29.02",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "液压电机电源合闸": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "29.03",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "液压电机启动信号": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "29.04",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "油箱上限位": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "29.05",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "油箱下限位": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "29.06",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "出口油堵塞报警": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "29.07",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "入口油堵塞报警": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "29.08",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "液压风冷运行": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "29.09",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "加载缸横移电源报警": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "29.10",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "液压风冷电源合闸": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "29.11",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "转轮电机报警": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "29.12",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "防沉气缸伸到位": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "29.13",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "防沉气缸缩到位": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "29.14",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "预留": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "29.15",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "系统急停": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "30.0",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "手动": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "30.01",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "自动": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "30.02",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "加载缸限制引导轨升": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "31.01",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "液压电机未合闸驱动液压缸": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "31.02",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "引导轨未到位油缸下降故障": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "31.03",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "油箱上限报警": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "31.04",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "油箱下限报警": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "31.05",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "出口油过滤报警": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "31.06",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "入口油过滤报警": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "31.07",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "油箱温度报警": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "31.08",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "缸1高油压报警": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "31.09",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "缸2高油压报警": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "31.10",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "高温风冷未运行": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "31.11",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "位移加载力大": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "31.13",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "缸位移偏差超长": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "31.14",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "系统油压高报警": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "31.15",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "加载缸加载力偏差超大": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "32.0",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "加载缸加载力超大报警": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "32.05",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "加载力设定太高报警": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "32.06",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "加载时位移超大报警": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "32.07",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "位移设定超限报警": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "32.08",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "气压过高": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "32.09",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "空载试验加载力偏差大": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "32.10",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "压磅试验位移偏差超大": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "32.11",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警",
+      "show": true
+    },
+    "横梁升降锁锁住信号": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "32.12",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "横梁升降锁打开信号": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "32.13",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "设备编号01020304": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "33",
+      "add": 0.0,
+      "segs": [],
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "加载头1压力传感器系数设置地址": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "34",
+      "add": 0.0,
+      "segs": [],
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "加载头2压力传感器系数设置地址": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "35",
+      "add": 0.0,
+      "segs": [],
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "稳态后两轴实际位置偏差大于15mm": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "36.0",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警!",
+      "show": true
+    },
+    "稳态后两轴实际力偏差大于10kn": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "36.01",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警!",
+      "show": true
+    },
+    "稳态后轴0目标位置和实际位置偏差大于15mm": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "36.02",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警!",
+      "show": true
+    },
+    "稳态后轴1目标位置和实际位置偏差大于15mm": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "36.03",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警!",
+      "show": true
+    },
+    "稳态后轴0目标力和实际力偏差大于10kn": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "36.04",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警!",
+      "show": true
+    },
+    "稳态后轴1目标力和实际力偏差大于10kn": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "36.05",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警!",
+      "show": true
+    },
+    "轴0进入开环": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "36.06",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警!",
+      "show": true
+    },
+    "轴1进入开环": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "36.07",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警!",
+      "show": true
+    },
+    "轴0位置传感器掉线": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "36.08",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警!",
+      "show": true
+    },
+    "s轴1位置传感器掉线": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "36.09",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警!",
+      "show": true
+    },
+    "轴0力传感器掉线": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "36.10",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警!",
+      "show": true
+    },
+    "轴1力传感器掉线": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "36.11",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警!",
+      "show": true
+    },
+    "油缸1实际力大于设定值力超过16kN": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "36.12",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警!",
+      "show": true
+    },
+    "油缸2实际力大于设定值力超过16kN": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "36.13",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警!",
+      "show": true
+    },
+    "截止阀开启后轴0轴1开环超过1s": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "36.14",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警!",
+      "show": true
+    },
+    "initial程序中接受pkc心态信号超时": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "36.15",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警!",
+      "show": true
+    },
+    "举升轨4角高度偏差大": {
+      "io": "i",
+      "type": "BOOL",
+      "addr-2byte": "37.01",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "报警!",
+      "show": true
+    },
+    "设定1位称重单元纵向移动目标位置": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "40",
+      "add": 0.0,
+      "segs": [],
+      "unit": "",
+      "desc": "4000-20000PLCAD",
+      "show": false
+    },
+    "设定2位称重单元纵向移动目标位置": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "41",
+      "add": 0.0,
+      "segs": [],
+      "unit": "",
+      "desc": "4000-20000PLCAD",
+      "show": false
+    },
+    "设定3位称重单元纵向移动目标位置": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "42",
+      "add": 0.0,
+      "segs": [],
+      "unit": "",
+      "desc": "4000-20000PLCAD",
+      "show": false
+    },
+    "设定4位称重单元纵向移动目标位置": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "43",
+      "add": 0.0,
+      "segs": [],
+      "unit": "",
+      "desc": "4000-20000PLCAD",
+      "show": false
+    },
+    "设定1位称重单元横向移动目标位置": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "44",
+      "add": 0.0,
+      "segs": [],
+      "unit": "",
+      "desc": "4000-20000PLCAD",
+      "show": false
+    },
+    "设定2位称重单元横向移动目标位置": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "45",
+      "add": 0.0,
+      "segs": [],
+      "unit": "",
+      "desc": "4000-20000PLCAD",
+      "show": false
+    },
+    "设定3位称重单元横向移动目标位置": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "46",
+      "add": 0.0,
+      "segs": [],
+      "unit": "",
+      "desc": "4000-20000PLCAD",
+      "show": false
+    },
+    "设定4位称重单元横向移动目标位置": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "47",
+      "add": 0.0,
+      "segs": [],
+      "unit": "",
+      "desc": "4000-20000PLCAD",
+      "show": false
+    },
+    "设定1位加载头横向移动目标位置": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "48",
+      "add": 0.0,
+      "segs": [],
+      "unit": "",
+      "desc": "4000-20000PLCAD",
+      "show": false
+    },
+    "设定2位加载头横向移动目标位置": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "49",
+      "add": 0.0,
+      "segs": [],
+      "unit": "",
+      "desc": "4000-20000PLCAD",
+      "show": false
+    },
+    "设定加载头1加载力": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "50",
+      "add": 0.0,
+      "segs": [
+        "加载压力1"
+      ],
+      "unit": "",
+      "desc": "4000-20000PLC",
+      "show": true
+    },
+    "设定加载头2加载力": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "51",
+      "add": 0.0,
+      "segs": [
+        "加载压力2"
+      ],
+      "unit": "",
+      "desc": "4000-20000PLC",
+      "show": true
+    },
+    "设定加载头1快进垂向位移": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "52",
+      "add": 0.0,
+      "segs": [
+        "加载头垂向位移1"
+      ],
+      "unit": "",
+      "desc": "4000-20000PLC",
+      "show": true
+    },
+    "设定加载头2快进垂向位移": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "53",
+      "add": 0.0,
+      "segs": [
+        "加载头垂向位移2"
+      ],
+      "unit": "",
+      "desc": "4000-20000PLC",
+      "show": true
+    },
+    "设定空气弹簧充气压力": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "54",
+      "add": 0.0,
+      "segs": [
+        "气压采集1"
+      ],
+      "unit": "",
+      "desc": "0-10000",
+      "show": true
+    },
+    "设定停放制动管路充气压力": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "55",
+      "add": 0.0,
+      "segs": [],
+      "unit": "",
+      "desc": "0-10000",
+      "show": false
+    },
+    "设定行车制动管路充气压力": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "56",
+      "add": 0.0,
+      "segs": [],
+      "unit": "kPa",
+      "desc": "0-10000",
+      "show": false
+    },
+    "设定空气弹簧工作高度": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "57",
+      "add": 0.0,
+      "segs": [
+        "加载头垂向位移1"
+      ],
+      "unit": "",
+      "desc": "4000-20000",
+      "show": true
+    },
+    "设定差压阀试验空气弹簧放气后目标压力值": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "58",
+      "add": 0.0,
+      "segs": [],
+      "unit": "",
+      "desc": "0-10000",
+      "show": true
+    },
+    "车型标记": {
+      "io": "o",
+      "type": "INT",
+      "addr-2byte": "59",
+      "add": 0.0,
+      "segs": [],
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "开始试验": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "61.0",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "降下转向架": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "61.01",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "确认转向架中心": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "61.02",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "选择命令": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "61.03",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "启动液压系统": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "61.04",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "建立液压系统工作压力": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "61.05",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "快进信息确认": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "61.06",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "快进加载装置": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "61.07",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "确认加载位置": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "61.08",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "力贴合加载": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "61.09",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "力工进": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "61.11",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "加载延时": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "61.12",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "计算": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "61.13",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "力工退": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "61.14",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "快退加载装置": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "62.0",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "停止液压系统": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "62.01",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "升起转向架": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "62.02",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "位移贴合加载": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "62.03",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "位移工进": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "62.05",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "空气弹簧充气": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "62.06",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "保压": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "62.07",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "差压阀试验1>2": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "62.08",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "差压阀试验2>1": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "62.09",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "空气弹簧放气": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "62.10",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "位移工退": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "62.11",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "制动单元动作试验": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "62.12",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "停放制动管路气密性试验开始": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "62.13",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "行车制动管路气密性试验开始": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "62.14",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "轮缘润滑管理气密性试验开始": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "62.15",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "停放制动管路气密性试验结束": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "63.0",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "行车制动管路气密性试验结束": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "63.01",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "轮缘润滑管理气密性试验结束": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "63.02",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "制动单元试验": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "63.03",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "停放制动软管充气": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "63.04",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "行车制动软管充气": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "63.05",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "施行缓解": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "63.06",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "停放管路释放": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "63.07",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "?停放制动软管充气": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "63.08",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "?停放管路释放": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "63.09",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "缓解": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "63.10",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "试验结束": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "63.11",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "空气弹簧1气路自检开始": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "63.12",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "空气弹簧2气路自检开始": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "63.13",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "空气弹簧1气路自检结束": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "63.14",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "空气弹簧2气路自检结束": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "63.15",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "停止试验": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "64.0",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "防沉降气缸伸出": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "64.01",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "防沉降气缸收回": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "64.02",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "清除故障": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "64.03",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "压磅中止": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "64.04",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "12气路排气终止": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "64.05",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "测12位轮对电阻": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "64.08",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "测34位轮对电阻": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "64.09",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "调整加载头横向移动启动信号": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "64.15",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "1位称重单元横向移动启动信号": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "65.0",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "2位称重单元横向移动启动信号": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "65.01",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "3位称重单元横向移动启动信号": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "65.02",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "4位称重单元横向移动启动信号": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "65.03",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "1位称重单元纵向移动启动信号": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "65.04",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "2位称重单元纵向移动启动信号": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "65.05",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "3位称重单元纵向移动启动信号": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "65.06",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "4位称重单元纵向移动启动信号": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "65.07",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "设置加载头1、2压力传感器系数信号": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "65.14",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "手动设置1自动设置0": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "65.15",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": false
+    },
+    "举升轨高度1": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "66",
+      "add": 0.0,
+      "segs": [
+        "0@0",
+        "300@300"
+      ],
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "举升轨高度2": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "67",
+      "add": 0.0,
+      "segs": [
+        "0@0",
+        "300@300"
+      ],
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "举升轨高度3": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "68",
+      "add": 0.0,
+      "segs": [
+        "0@0",
+        "300@300"
+      ],
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "举升轨高度4": {
+      "io": "i",
+      "type": "INT",
+      "addr-2byte": "69",
+      "add": 0.0,
+      "segs": [
+        "0@0",
+        "300@300"
+      ],
+      "unit": "",
+      "desc": "无",
+      "show": true
+    }
+  }
+}

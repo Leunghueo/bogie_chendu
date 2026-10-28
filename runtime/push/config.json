@@ -1,0 +1,271 @@
+{
+    "emis": {
+        "sim": "http://127.0.0.1:9990",
+        "real": "http://10.103.12.240/DeviceIntf/Service.asmx/ReportData",
+        "url": "http://10.103.12.240/DeviceIntf/Service.asmx/ReportData",
+        "param": {
+            "DeviceType": "BGSL",
+            "DeviceID": "bed.json中的`设备编号`",
+            "DataType": "DEVICEDATA",
+            "Data": ""
+        },
+        "data_demo": {
+            "CheckRecord": {
+                "BasicInfo": {
+                    "Version": "1.0",
+                    "DeviceCode": "bed.json中的`设备编号`",
+                    "FactoryID": "10002",
+                    "GernerateTime": "2026-10-09 14:30:00"
+                },
+                "StuffInfo": {
+                    "OperatorID": "0005",
+                    "OperatrName": "试验操作员A"
+                },
+                "DeviceInfo": {
+                    "ZhouHao": "CRH2A‑2391",
+                    "CheHao": "2391",
+                    "ZhuanXiangJiaBianHao": "15SFEZ12T‑045‑2",
+                    "IDNO": "TAG‑000123",
+                    "CheckStartTime": "2026-10-09 14:00:00",
+                    "CheckEndTime": "2026-10-09 14:28:00"
+                },
+                "CheckData": {
+                    "BG_type": "CRH2A‑250(E28)",
+                    "BogieNo": "15SFEZ12T‑045‑2",
+                    "BG_Direction": "0",
+                    "User": "试验操作员A",
+                    "wheelset_Front": "ZQ M2B 11236",
+                    "wheelset_Rear": "ZQ M2B 13154",
+                    "No_of_the_beam_of_the_springs": 0.1,
+                    "No_of_tilting_beam": "761030001002",
+                    "distance_run": 1235941,
+                    "Building_year": "2015",
+                    "Type_of_maintenance": "三级修",
+                    "No_of_vehicle": "ZE239102",
+                    "Gauge_of_the_track": "1435",
+                    "Wheel_diameter": "890.25",
+                    "Net_Weight": "7.013",
+                    "Tare": 7.013,
+                    "Gross": 7.013,
+                    "Max_load": 220.0,
+                    "Lateral_force": 12.5,
+                    "Air_pressure": 76.82,
+                    "Wheel_base_AC": 2500,
+                    "Wheel_base_CE": 2500,
+                    "Height_of_wheelflange": 30,
+                    "Crossbar_to_top_of_rail": 1036,
+                    "measureResultList": [
+                        {
+                            "No": "1",
+                            "Label": "1‑2 位内侧距",
+                            "Description": "1‑2位轮对内侧距检测",
+                            "Minimum": "1353.0",
+                            "Current": "1354.34",
+                            "Maximum": "1355.0",
+                            "Unit": "mm",
+                            "Decision": "合格"
+                        },
+                        {
+                            "No": "2",
+                            "Label": "3‑4 位内侧距",
+                            "Description": "3‑4位轮对内侧距检测",
+                            "Minimum": "1353.0",
+                            "Current": "1354.10",
+                            "Maximum": "1355.0",
+                            "Unit": "mm",
+                            "Decision": "合格"
+                        },
+                        {
+                            "No": "3",
+                            "Label": "1‑3 位轴距",
+                            "Description": "1‑3位轴距检测",
+                            "Minimum": "2498.0",
+                            "Current": "2501.50",
+                            "Maximum": "2501.0",
+                            "Unit": "mm",
+                            "Decision": "报警"
+                        }
+                    ]
+                },
+                "CheckConclusion": [
+                    {
+                        "AlarmItems": {
+                            "AlarmItem": "1‑3 位轴距",
+                            "AlarmLevel": "1"
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "iot": {
+        "host": "172.30.88.23",
+        "host_sim": "127.0.0.1",
+        "host_real": "172.30.88.23",
+        "port": "1883",
+        "clientId": "bed.json中的`设备编号`",
+        "username": "xltjzsyt",
+        "password": "YOUR_IOT_PASSWORD",
+        "pub": "/sysBogieTestProperyData501",
+        "interval": 10,
+        "data_demo": {
+            "device_id": "bed.json中的`设备编号`",
+            "device_name": "静载试验台（501）",
+            "time": "1747804986(当前时间戳)",
+            "attr_info": [
+                {
+                    "attr_name": "设备状态",
+                    "attr_code": "deviceStatus",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": "空闲/忙碌"
+                },
+                {
+                    "attr_name": "设备执行流程状态标记",
+                    "attr_code": "streamStatus",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": "0"
+                },
+                {
+                    "attr_name": "设备执行流程状态名称",
+                    "attr_code": "streamStatusName",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": "空闲"
+                },
+                {
+                    "attr_name": "1位油缸加载压力1",
+                    "attr_code": "LoadF1",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": 0.0
+                },
+                {
+                    "attr_name": "2位油缸加载压力",
+                    "attr_code": "LoadF2",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": 0.0
+                },
+                {
+                    "attr_name": "1位油缸垂向位移",
+                    "attr_code": "LoadDist1",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": 0.0
+                },
+                {
+                    "attr_name": "2位油缸垂向位移",
+                    "attr_code": "LoadDist2",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": 0.0
+                },
+                {
+                    "attr_name": "1位油缸横向位移",
+                    "attr_code": "LoadHorDist1",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": 0.0
+                },
+                {
+                    "attr_name": "2位油缸横向位移",
+                    "attr_code": "LoadHorDist2",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": 0.0
+                },
+                {
+                    "attr_name": "1位空气弹簧气压",
+                    "attr_code": "AirSpringP1",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": 0.0
+                },
+                {
+                    "attr_name": "2位空气弹簧气压",
+                    "attr_code": "AirSpringP2",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": 0.0
+                },
+                {
+                    "attr_name": "液压站压力",
+                    "attr_code": "HydraulicStationP",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": 0.0
+                },
+                {
+                    "attr_name": "液压站温度",
+                    "attr_code": "HydraulicStationTemp",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": 0.0
+                },
+                {
+                    "attr_name": "1位轮重",
+                    "attr_code": "WW1",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": 0.0
+                },
+                {
+                    "attr_name": "2位轮重",
+                    "attr_code": "WW2",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": 0.0
+                },
+                {
+                    "attr_name": "3位轮重",
+                    "attr_code": "WW3",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": 0.0
+                },
+                {
+                    "attr_name": "4位轮重",
+                    "attr_code": "WW4",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": 0.0
+                },
+                {
+                    "attr_name": "升降轨高度1",
+                    "attr_code": "railHeight1",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": 0.0
+                },
+                {
+                    "attr_name": "升降轨高度2",
+                    "attr_code": "railHeight2",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": 0.0
+                },
+                {
+                    "attr_name": "升降轨高度3",
+                    "attr_code": "railHeight3",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": 0.0
+                },
+                {
+                    "attr_name": "升降轨高度4",
+                    "attr_code": "railHeight4",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": 0.0
+                },
+                {
+                    "attr_name": "检修转向架动车组车型",
+                    "attr_code": "CrhModel",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": "CRH2B"
+                },
+                {
+                    "attr_name": "检修转向架编号",
+                    "attr_code": "BogieSerialNo",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": ""
+                },
+                {
+                    "attr_name": "车号",
+                    "attr_code": "BogiePosi",
+                    "attr_time": "1747804986(当前时间戳)",
+                    "attr_value": "T1-2"
+                },
+                {
+                    "attr_name": "故障代码",
+                    "attr_code": "alarmCode",
+                    "attr_time": "1747804986(当前时间戳)"
+                }
+            ]
+        }
+    },
+    "caa": {
+        "url": ""
+    }
+}
