@@ -36,6 +36,9 @@ plc_config_path = BASE_DIR /  config.get("plc", "path")
 vsp_used = BASE_DIR / config.get("vsp", "used")
 vsp_config_path = BASE_DIR /  config.get("vsp", "path")
 
+can_used = config.get("can", "used")
+can_config_path = BASE_DIR /  config.get("can", "path")
+
 flow_template_dir = BASE_DIR /  config.get("flow", "path")
 node_config_path = BASE_DIR /  config.get("node", "path")
 bogie_config_path = BASE_DIR /  config.get("bogie", "path")
@@ -60,6 +63,7 @@ init_runtime(
     sim=sim,
     plc_used=plc_used,
     vsp_used=vsp_used,
+    can_used=can_used,
     theme=theme,
     bed_data=bed_data,
     guard = guard,
@@ -67,6 +71,7 @@ init_runtime(
     paths={
         "plc_config": plc_config_path,
         "vsp_config": vsp_config_path,
+        "can_config": can_config_path,
         "flow_dir": flow_template_dir,
         "node_config": node_config_path,
         "bogie_config": bogie_config_path,

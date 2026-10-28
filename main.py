@@ -31,10 +31,12 @@ def _load_runtime() -> dict[str, object]:
     import broker as broker_lib
     import plc as plc_lib
     import vsp as vsp_lib
+    import can as can_lib
     import wf as wf_lib
     from broker import create_broker
     from plc import load_pt
     from vsp import load_vsp
+    from can import load_can
     import pdf as pdf_lib
     import push.iot as iot_lib
 
@@ -50,6 +52,11 @@ def _load_runtime() -> dict[str, object]:
         vsp_table = load_vsp(str(_rt["paths"]["vsp_config"]),sim=sim)
         vsp_table.broker = broker
         vsp_table.start()
+
+    if _rt["config"].getboolean("can", "used"):
+        can_table = load_can(str(_rt["paths"]["can_config"]),sim=sim)
+        can_table.broker = broker
+        can_table.start()
 
     workflow = None
     ui_registry = load_ui_registry()
@@ -77,6 +84,9 @@ def _load_runtime() -> dict[str, object]:
 
         vsp_lib=vsp_lib if _rt["config"].getboolean("vsp", "used") else None,
         vsp=vsp_table  if _rt["config"].getboolean("vsp", "used") else None,
+
+        can_lib=can_lib if _rt["config"].getboolean("can", "used") else None,
+        can=can_table  if _rt["config"].getboolean("can", "used") else None,
 
         wf_lib=wf_lib,
         pdf_lib=pdf_lib,
@@ -137,6 +147,14 @@ def main() -> int:
                 vsp.stop()
             except Exception:
                 logger.exception("stop vsp polling failed")
+
+        can = runtime.get("can")
+        if can is not None:
+            logger.info(f"关闭CAN轮询")
+            try:
+                can.stop()
+            except Exception:
+                logger.exception("stop can polling failed")
 
         broker = runtime.get("broker")
         if broker is not None:

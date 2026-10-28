@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import socket
 import struct
 import threading
@@ -18,6 +19,11 @@ try:
     from segs import SegmentMapping
 except ModuleNotFoundError:  # pragma: no cover - fallback for package imports
     from main.libs.segs import SegmentMapping
+
+try:
+    from convert import RawValueConverter
+except ModuleNotFoundError:  # pragma: no cover - fallback for package imports
+    from main.libs.convert import RawValueConverter
 
 STATUS_OK = 0
 STATUS_ERROR = 1
@@ -155,12 +161,10 @@ class PLCPoint:
         segs = self._get_reference_segs(table)
         print(f"[_to_raw_value] {self.name}: value={float_value}, segs_ref={self._segs_ref}, add={self.add}")
         print(f"[_to_raw_value] segs.segments={segs.segments}")
-        if segs.segments:
-            raw = segs.apply_reverse(float_value)
-            print(f"[_to_raw_value] after apply_reverse: raw={raw}")
-        else:
-            raw = float_value
-        result = int(raw + self.add)
+        # 公共换算：真值 -> 原始值（apply_reverse 后 +add，与原行为一致）
+        raw = RawValueConverter(segs=segs, add=self.add).to_raw(float_value)
+        print(f"[_to_raw_value] after apply_reverse+add: raw={raw}")
+        result = int(raw)
         print(f"[_to_raw_value] final: raw + add = {raw} + {self.add} = {result}")
         return result
 
@@ -192,10 +196,9 @@ class PLCPoint:
         if self.point_type == "BOOL":
             return raw_value
 
-        value = float(raw_value)
         segs = self._get_reference_segs(table)
-        value = segs.apply(value)
-        value += self.add
+        # 公共换算：原始值 -> 真值（segs.apply 后 +add）
+        value = RawValueConverter(segs=segs, add=self.add).to_true(raw_value)
 
         # if self.point_type in {"WORD", "INT"} and not self.segs.segments:
         #     print(f"{self.name} NO SEGS!!!")
@@ -380,7 +383,7 @@ class PLCPointTable:
         config_file = Path(config_path).resolve()
         data = json.loads(config_file.read_text(encoding="utf-8"))
 
-        connection = data["connection"]
+        connection = data["config"]
         raw_points: dict[str, dict[str, Any]] = data["pts"]
 
         self.sim = sim
@@ -465,7 +468,7 @@ class PLCPointTable:
         所有外部引用（broker、done_evaluator、runtime 中的实例）均保持有效。
         """
         data = json.loads(self.config_path.read_text(encoding="utf-8"))
-        connection = data["connection"]
+        connection = data["config"]
         raw_points: dict[str, dict[str, Any]] = data["pts"]
 
         # 更新连接参数

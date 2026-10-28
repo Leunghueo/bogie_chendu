@@ -31,8 +31,13 @@ from _runtime import get_runtime
 
 logger = logging.getLogger(__name__)
 from ui.dialog_dyn_dims.view import Window as DynDimsDialog
-from ui.dialog_plc.view import Window as PlcDialog
-from ui.view_ai.view import check_ollama_status
+from ui.dialog_pts.view import Window as PtsDialog
+
+# view_ai 在本快照里不存在，且其状态检查本来就被注释掉了，容错导入。
+try:
+    from ui.view_ai.view import check_ollama_status
+except ModuleNotFoundError:  # pragma: no cover - 本快照无 view_ai
+    check_ollama_status = None
 from ui.view_login.view import Window as LoginWindow
 from ui.wgt_tab.view import TabWidget
 
@@ -158,7 +163,7 @@ class Window(QMainWindow):
         self.runtime = get_runtime()
         self.size = self.runtime["size"]
         self.dyn_dims_dialog: DynDimsDialog | None = None
-        self.plc_dialog: PlcDialog | None = None
+        self.pts_dialog: PtsDialog | None = None
         self.log_viewer: LogViewerDialog | None = None
         self._fault_message = "无"
         self._plc_ready = bool(getattr(self.runtime["plc"], "is_connected", lambda: False)())
@@ -180,7 +185,7 @@ class Window(QMainWindow):
         self._apply_screen_size()
         self._create_toolbar()
         self.open_view(default_view_id, fixed=True)
-        self.open_view("view_plc", fixed=True)
+        self.open_view("view_pts", fixed=True)
         self.open_view("view_dyn_dims", fixed=True)
         self.open_view("view_airplot", fixed=True)
         self.open_view("view_history", fixed=True)
@@ -372,14 +377,18 @@ class Window(QMainWindow):
         self.dyn_dims_dialog.raise_()
         self.dyn_dims_dialog.activateWindow()
 
-    def _open_plc_dialog(self) -> None:
+    def _open_pts_dialog(self) -> None:
         if not self._plc_ready:
             return
-        if self.plc_dialog is None:
-            self.plc_dialog = PlcDialog(self)
-        self.plc_dialog.show()
-        self.plc_dialog.raise_()
-        self.plc_dialog.activateWindow()
+        if self.pts_dialog is None:
+            self.pts_dialog = PtsDialog(self)
+        self.pts_dialog.show()
+        self.pts_dialog.raise_()
+        self.pts_dialog.activateWindow()
+
+    # 兼容旧名（该方法在工具栏里本来就被注释掉了）。
+    def _open_plc_dialog(self) -> None:
+        self._open_pts_dialog()
 
     def _open_today_log(self) -> None:
         logs_dir = Path(self.runtime["base_dir"]) / "logs" / "daily"

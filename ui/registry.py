@@ -9,8 +9,14 @@ from _runtime import get_runtime
 from .dialog_about.view import Window as AboutDialog
 from .dialog_airplot.view import Window as AirplotView
 from .dialog_dyn_dims.view import Window as DynDimsView
-from .dialog_plc.view import Window as PlcView
-from .view_ai.view import Window as AiView
+from .dialog_pts.view import Window as PtsView
+
+# view_ai 在本快照里不存在（其两个页面本来就被注释掉了），
+# 这里容错导入，免得注册中心一导入就起不来；恢复该模块后可改回直接导入。
+try:
+    from .view_ai.view import Window as AiView
+except ModuleNotFoundError:  # pragma: no cover - 本快照无 view_ai
+    AiView = None
 from .view_flow.view import Window as FlowView
 from .view_history.view import Window as HistoryView
 from .view_home.view import Window as HomeView
@@ -70,7 +76,7 @@ VIEWS = {
     "view_home": {"title": "试验流程", "obj": HomeView},
     # "view_flow": {"title": "流程浏览器", "obj": FlowView},
     "view_history": {"title": "历史记录", "obj": HistoryView},
-    "view_plc": {"title": "PLC操作", "obj": PlcView},
+    "view_pts": {"title": "点位", "obj": PtsView},
     "view_dyn_dims": {"title": "实时数据", "obj": DynDimsView},
     "view_airplot": {"title": "气压曲线", "obj": AirplotView},
     "dialog_bogie_setting": {"title": "转向架设置", "obj": BogieSetting},

@@ -108,8 +108,8 @@ class Window(QDialog):
         self._refresh_chart()
 
     def _build_target_context(self) -> None:
-        if self.pt_type not in {"plc", "vsp"}:
-            raise ValueError("pt_type must be 'plc' or 'vsp'")
+        if self.pt_type not in {"plc", "vsp", "can"}:
+            raise ValueError("pt_type must be 'plc', 'vsp' or 'can'")
 
         runtime_key = self.pt_type
         path_key = f"{self.pt_type}_config"
@@ -123,10 +123,8 @@ class Window(QDialog):
         if raw_point.get("segs") is None:
             raise ValueError(f"{self.pt_type}.{self.pt_name} does not support segs editing")
 
-        if self.pt_type == "plc":
-            point_obj = table.points.get(self.pt_name)
-        else:
-            point_obj = table.points.get(self.pt_name)
+        # plc/vsp/can 三路的点表都是 points[name]，不再分叉。
+        point_obj = table.points.get(self.pt_name)
         if point_obj is None:
             raise KeyError(f"{self.pt_type}.{self.pt_name} not loaded")
 
@@ -241,11 +239,14 @@ class Window(QDialog):
 
     def _point_address(self) -> str:
         assert self._raw_point is not None
+        if self.pt_type == "can":
+            bus = self._raw_point.get("bus") or "-"
+            node = self._raw_point.get("node")
+            return f"{bus} / 节点{node}" if node is not None else str(bus)
         return str(self._raw_point.get("addr-2byte") or self._raw_point.get("addr") or self._raw_point.get("port") or "-")
 
     def _point_unit(self) -> str | None:
-        if self.pt_type == "plc":
-            return getattr(self._point_obj, "unit", None)
+        # plc/vsp/can 的点对象都有 unit 属性（can 是 property，vsp 是 config 透传）。
         return getattr(self._point_obj, "unit", None)
 
     def _load_table(self) -> None:

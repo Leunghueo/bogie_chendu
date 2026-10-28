@@ -15,6 +15,11 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - fallback for package imports
     from main.libs.segs import SegmentMapping
 
+try:
+    from convert import RawValueConverter
+except ModuleNotFoundError:  # pragma: no cover - fallback for package imports
+    from main.libs.convert import RawValueConverter
+
 ParserFunc = Callable[[bytes], float]
 PARSERS: dict[str, ParserFunc] = {}
 
@@ -122,7 +127,10 @@ class VSPPoint:
         return self.config.endpoint
 
     def update(self, raw_value: float) -> None:
-        value = round(self.config.segs.apply(raw_value) + self.config.add, 3)
+        # 公共换算：原始值 -> 真值（segs.apply 后 +add，保留 3 位小数）
+        value = RawValueConverter(segs=self.config.segs, add=self.config.add).to_true(
+            raw_value, round_digits=3
+        )
         if value > VALUE_LIMIT:
             # 超上限只可能是异常：补码负数被无符号解析、或帧错位/脏数据。
             # 归零并记录原始值，避免假值进入测量与整车重累加。
@@ -235,13 +243,13 @@ class VSPTable:
     def __init__(self, config_path: str | Path, sim: bool = False) -> None:
         config_file = Path(config_path).resolve()
         data = json.loads(config_file.read_text(encoding="utf-8"))
-        service_config = data.get("service_config") or {}
+        config_section = data.get("config") or {}
         raw_points: dict[str, dict[str, Any]] = data.get("pts") or {}
 
         self.config_path = config_file
-        self.poll_interval_ms = int(service_config.get("poll_interval_ms", 500))
-        self.timeout_ms = int(service_config.get("timeout_ms", 300))
-        self.recv_bytes = int(service_config.get("recv_bytes", 4096))
+        self.poll_interval_ms = int(config_section.get("poll_interval_ms", 500))
+        self.timeout_ms = int(config_section.get("timeout_ms", 300))
+        self.recv_bytes = int(config_section.get("recv_bytes", 4096))
         self.points: dict[str, VSPPoint] = {}
         self.broker = None
         self.alive = False
@@ -268,7 +276,8 @@ class VSPTable:
                     read_cmd=read_cmd,
                     zero_cmd=zero_cmd,
                     add=float(add_raw) if add_raw is not None else 0.0,
-                    parser_name=str(point_data.get("parser") or "").strip(),
+                    # 成都静载：所有 VSP 点统一用 head_x 解析，不再按配置文件里的 parser 分流
+                    parser_name="head_x",
                     segs=SegmentMapping.parse(point_data.get("segs")),
                     unit=point_data.get("unit"),
                 )
@@ -302,12 +311,12 @@ class VSPTable:
         所有外部引用（broker、runtime 中的实例）均保持有效。
         """
         data = json.loads(self.config_path.read_text(encoding="utf-8"))
-        service_config = data.get("service_config") or {}
+        config_section = data.get("config") or {}
         raw_points: dict[str, dict[str, Any]] = data.get("pts") or {}
 
-        self.poll_interval_ms = int(service_config.get("poll_interval_ms", 500))
-        self.timeout_ms = int(service_config.get("timeout_ms", 300))
-        self.recv_bytes = int(service_config.get("recv_bytes", 4096))
+        self.poll_interval_ms = int(config_section.get("poll_interval_ms", 500))
+        self.timeout_ms = int(config_section.get("timeout_ms", 300))
+        self.recv_bytes = int(config_section.get("recv_bytes", 4096))
 
         # 构建新点位表（锁外完成，不影响轮询线程）
         new_points: dict[str, VSPPoint] = {}
@@ -315,13 +324,20 @@ class VSPTable:
             addr = point_data.get("addr") or point_data.get("port")
             if addr is None:
                 raise KeyError(f"{name}: missing addr")
+            if self.sim:
+                # 与 __init__ 一致：sim 模式下不写回文件，只临时替换地址
+                addr = self.SIM_ENDPOINT
+            read_cmd, zero_cmd = parse_cmds(point_data.get("cmd"))
+            add_raw = point_data.get("add")
             point = VSPPoint(
                 VSPPointConfig(
                     name=name,
                     endpoint=Endpoint.parse(addr),
-                    cmd=parse_hex_cmd(point_data.get("cmd")),
-                    add=point_data.get("add"),
-                    parser_name=str(point_data.get("parser") or "").strip(),
+                    read_cmd=read_cmd,
+                    zero_cmd=zero_cmd,
+                    add=float(add_raw) if add_raw is not None else 0.0,
+                    # 成都静载：所有 VSP 点统一用 head_x 解析
+                    parser_name="head_x",
                     segs=SegmentMapping.parse(point_data.get("segs")),
                     unit=point_data.get("unit"),
                 )
