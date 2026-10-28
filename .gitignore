@@ -1,0 +1,56 @@
+# 成都静载上位机程序 .gitignore
+# 目标：以后可以直接 git add .，不用每次手动挑文件。
+# 不会被忽略、git add . 会正常加进去的文件包括：
+#   全部 .py 源码、app.ini、各路 json 配置、
+#   runtime/db/bogie.db、runtime/pdf/abc.xlsx、
+#   runtime/res/icon/、runtime/res/image/ 这些二进制资源。
+# 注意：.gitignore 只对“未追踪”的文件有效。
+# runtime/push/config.json 已经在仓库里（占位口令版），
+# 你在本地填回真实口令后，git status 仍会显示它改动了，
+# 提交前务必检查，不要把真实口令提交进公开仓库。
+
+# ---- Python 编译缓存 ----
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ---- 虚拟环境与打包产物 ----
+.venv/
+venv/
+ENV/
+env/
+build/
+dist/
+*.egg-info/
+*.egg
+*.spec
+
+# ---- 编辑器与系统文件 ----
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ---- 运行日志与临时文件 ----
+logs/
+*.log
+*.tmp
+*.bak
+*.swp
+
+# ---- 程序运行时生成的文件（模板本身不在此列） ----
+# runtime/pdf/ 下生成的报告 PDF 不入仓，模板 abc.xlsx 正常入仓。
+runtime/pdf/*.pdf
+# SQLite 运行时产生的临时文件不入仓，数据库本身 bogie.db 正常入仓。
+*.db-journal
+*.db-wal
+*.db-shm
+
+# ---- 测试与检查缓存 ----
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
