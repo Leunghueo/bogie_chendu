@@ -5,7 +5,7 @@ from PySide6.QtCore import Qt, Signal
 from typing import Callable
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
-from _runtime import get_runtime
+from .pt_source import resolve_point
 
 
 class PtLed(QFrame):
@@ -175,34 +175,32 @@ class PtLed(QFrame):
             default_action()
 
     def update(self) -> None:
-        """读取 PLC 点位，自动判断类型并更新控件外观。"""
-        runtime = get_runtime()
-        plc = runtime.get("plc")
-        if plc is None:
-            self._handle_display("ERR", self._set_err_state)
-            return
+        """按点名读取点位，自动判断类型并更新控件外观。
 
+        点名只按名解析，不用理会它在 plc/vsp/can 哪张表里（见 pt_source）。
+        BOOL 点显示 ON/OFF，其余（plc 数值点、vsp/can 点）显示数值+单位。
+        """
         try:
-            point = plc.points.get(self._pt_name)
-            if point is None:
+            resolved = resolve_point(self._pt_name)
+            if resolved is None:
                 self._handle_display("ERR", self._set_err_state)
                 return
 
-            value = plc.read(self._pt_name)
+            value = resolved.read()
             if value is None:
                 self._handle_display("ERR", self._set_err_state)
                 return
 
-            if point.point_type == "BOOL":
+            if resolved.is_bool:
                 display_text = "ON" if bool(value) else "OFF"
                 self._handle_display(display_text, lambda: self._set_bool_state(bool(value)))
             else:
-                # INT/REAL/WORD 统一按数值格式化
+                # plc INT/REAL/WORD 与 vsp/can 数值统一按数值格式化
                 if isinstance(value, float):
                     display_val = f"{value:.1f}"
                 else:
                     display_val = str(value)
-                unit = point.unit or ""
+                unit = resolved.unit or ""
                 full_text = f"{display_val} {unit}".strip()
                 self._handle_display(full_text, lambda: self._set_numeric_state(full_text))
         except Exception:

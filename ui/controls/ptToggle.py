@@ -3,7 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QWidget
 
-from _runtime import get_runtime
+from .pt_source import resolve_point
 
 
 class PtToggle(QFrame):
@@ -90,15 +90,13 @@ class PtToggle(QFrame):
             )
 
     def update(self) -> None:
-        """读取 PLC 点位并更新控件外观。"""
-        runtime = get_runtime()
-        plc = runtime.get("plc")
-        if plc is None:
-            self._set_state("err")
-            return
-
+        """按点名读取点位并更新控件外观（plc/vsp/can 通用，读不到显示 ERR）。"""
         try:
-            value = plc.read(self._pt_name)
+            resolved = resolve_point(self._pt_name)
+            if resolved is None:
+                self._set_state("err")
+                return
+            value = resolved.read()
             if value is None:
                 self._set_state("err")
             else:
@@ -112,19 +110,21 @@ class PtToggle(QFrame):
         super().mousePressEvent(event)
 
     def _on_toggle(self) -> None:
-        """内部写入逻辑：读取当前值 -> 取反 -> 写入 -> 延时回读。"""
-        runtime = get_runtime()
-        plc = runtime.get("plc")
-        if plc is None:
-            self._set_state("err")
-            return
+        """内部写入逻辑：读取当前值 -> 取反 -> 写入 -> 延时回读。
 
+        写入只有 plc 支持：vsp/can 点 write() 会抛 TypeError，按原有
+        ERR 路径处理（只读点点一下不会崩，也不会假装写成功）。
+        """
         try:
-            current = plc.read(self._pt_name)
+            resolved = resolve_point(self._pt_name)
+            if resolved is None:
+                self._set_state("err")
+                return
+            current = resolved.read()
             current_bool = bool(current) if current is not None else False
             new_value = not current_bool
 
-            plc.write(self._pt_name, new_value)
+            resolved.write(new_value)
 
             if self._update:
                 QTimer.singleShot(self._READBACK_DELAY_MS, self.update)

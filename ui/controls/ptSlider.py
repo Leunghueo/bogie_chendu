@@ -4,7 +4,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QWidget
 
-from _runtime import get_runtime
+from .pt_source import resolve_point
 
 
 class PtSlider(QFrame):
@@ -91,27 +91,25 @@ class PtSlider(QFrame):
             self.update()
             return
 
-        runtime = get_runtime()
-        plc = runtime.get("plc")
-        if plc is None:
-            self._set_err_state()
-            return
-
+        # 写入只有 plc 支持：vsp/can 点走 resolve 后 write() 会抛 TypeError，
+        # 这里按原有 ERR 路径处理，不会崩。
         try:
-            plc.write(self._pt_name, val)
+            resolved = resolve_point(self._pt_name)
+            if resolved is None:
+                self._set_err_state()
+                return
+            resolved.write(val)
         except Exception:
             self._set_err_state()
 
     def update(self) -> None:
-        """读取 PLC 点位并更新输入框显示值。"""
-        runtime = get_runtime()
-        plc = runtime.get("plc")
-        if plc is None:
-            self._set_err_state()
-            return
-
+        """按点名读取点位并更新输入框显示值（plc/vsp/can 通用）。"""
         try:
-            raw = plc.read(self._pt_name)
+            resolved = resolve_point(self._pt_name)
+            if resolved is None:
+                self._set_err_state()
+                return
+            raw = resolved.read()
             if raw is None:
                 self._set_err_state()
             else:
