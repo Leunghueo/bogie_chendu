@@ -5,9 +5,9 @@
     "port": 502,
     "slave_id": 1,
     "protocol": "modbus-tcp",
-    "timeout_ms": 1000,
+    "timeout_ms": 2000,
     "reconnect_interval_ms": 3000,
-    "poll_interval_ms": 500,
+    "poll_interval_ms": 300,
     "wait_before_watch": 500
   },
   "pts": {

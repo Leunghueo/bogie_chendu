@@ -531,7 +531,7 @@ def load_vsp(config_path: str | Path, sim: bool = False) -> VSPTable:
 @parser("head_x")
 def hex2dis(data: bytes) -> float:
     if len(data) < 6:
-        raise ValueError(f"hex2dis requires at least 6 bytes, got {len(data)}")
+        raise ValueError(f"压头位移采集字节数{len(data)}<6")
 
     value_bytes = data[-6:-2]
     raw_value = int.from_bytes(value_bytes, byteorder="big", signed=False)
@@ -541,7 +541,7 @@ def hex2dis(data: bytes) -> float:
 @parser("weight")
 def hex2kg(data: bytes) -> float:
     if len(data) < 6:
-        raise ValueError(f"hex2dis requires at least 6 bytes, got {len(data)}")
+        raise ValueError(f"压头位移采集字节数{len(data)}<6")
 
     value_bytes = data[-6:-2]
     ret = int.from_bytes(value_bytes, byteorder="big", signed=False)

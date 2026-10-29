@@ -1,7 +1,7 @@
 {
   "config": {
-    "poll_interval_ms": 300,
-    "sdo_timeout_ms": 1000
+    "poll_interval_ms": 500,
+    "sdo_timeout_ms": 2000
   },
   "pts": {
     "称重台位移1": {

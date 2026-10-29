@@ -1,6 +1,6 @@
 {
   "config": {
-    "poll_interval_ms": 300
+    "poll_interval_ms": 500
   },
   "pts": {
     "称重台1": {
