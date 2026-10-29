@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import socket
 import threading
 import time
@@ -25,12 +26,22 @@ PARSERS: dict[str, ParserFunc] = {}
 
 logger = logging.getLogger(__name__)
 
+HEAD_BASE = 8041973
+
 #: 工程量上限：超过此值视为无效读数（归零）。
 # 现场称重台真实量程远小于此（单轮约 2 万 kg 量级）。设置它的原因是：
 # 零点漂移到负数时，设备以补码下发（如 -1 -> FFFFFFFF），而无符号解析
 # 会把它读成 4294967295，经换算后变成 400 万量级的假值，直接污染轮重、
 # 轴重与整车重累加。超过上限一律按 0 处理，保证"最小值不为负、异常不放大"。
 VALUE_LIMIT = 1.0e6
+
+#: 激光位移传感器(HL‑G1)RMD 应答的工程量换算：1 LSB = 0.0001 mm。
+#: 手册给出数据段范围 -9500000 ~ +9500000，对应 -950.0000 ~ +950.0000 mm。
+LASER_LSB_TO_MM = 1.0 / 10000.0
+
+#: 应答为 ASCII 文本帧（按 \r/\n 收帧）的解析器；其余按 Modbus 二进制定长帧收。
+#: 激光走串口服务器透传的 ASCII 协议，必须走文本收帧，否则会被按 Modbus 长度误读。
+TEXT_PARSERS = {"text_number", "laser"}
 
 def parser(name: str) -> Callable[[ParserFunc], ParserFunc]:
     def decorator(func: ParserFunc) -> ParserFunc:
@@ -91,18 +102,49 @@ class VSPPointConfig:
         }
 
 
+def parse_ascii_cmd(raw: Any) -> bytes:
+    """解析 ASCII 文本指令（激光传感器用，如 "%01#RMD**\\r"）.
+
+    配置里可直接写 "\\r" 转义，按原字节顺序编码下发。
+    """
+    text = str(raw or "").replace("\\r", "\r").replace("\\n", "\n")
+    if not text.strip():
+        raise ValueError("cmd is required")
+    try:
+        return text.encode("ascii")
+    except UnicodeEncodeError as exc:
+        raise ValueError(f"invalid ascii command: {raw!r}") from exc
+
+
+def parse_cmd(raw: Any) -> bytes:
+    """单条指令解析：以 % 开头的按 ASCII 文本，其余按 HEX。"""
+    if str(raw or "").lstrip().startswith("%"):
+        return parse_ascii_cmd(raw)
+    return parse_hex_cmd(raw)
+
+
+def parse_parser_name(point_data: dict[str, Any], name: str) -> str:
+    """取点位解析器名：默认 head_x，未知解析名直接报错。"""
+    parser_name = str(point_data.get("parser") or "head_x").strip()
+    if parser_name not in PARSERS:
+        raise KeyError(
+            f"{name}: unknown parser {parser_name!r}, available: {sorted(PARSERS)}"
+        )
+    return parser_name
+
+
 def parse_cmds(raw: Any) -> tuple[bytes, bytes | None]:
     """解析点位指令配置.
 
-    新格式: {"read": "<hex>", "zero": "<hex>"}；兼容旧格式: "<hex>"（仅 read）。
-    返回 (read_cmd, zero_cmd)。
+    新格式: {"read": "<hex 或 ascii>", "zero": "<hex 或 ascii>"}；
+    兼容旧格式: "<hex>"（仅 read）。返回 (read_cmd, zero_cmd)。
     """
     if isinstance(raw, dict):
-        read_cmd = parse_hex_cmd(raw.get("read"))
+        read_cmd = parse_cmd(raw.get("read"))
         zero_raw = raw.get("zero")
-        zero_cmd = parse_hex_cmd(zero_raw) if zero_raw else None
+        zero_cmd = parse_cmd(zero_raw) if zero_raw else None
         return read_cmd, zero_cmd
-    return parse_hex_cmd(raw), None
+    return parse_cmd(raw), None
 
 
 class VSPPoint:
@@ -134,10 +176,10 @@ class VSPPoint:
         if value > VALUE_LIMIT:
             # 超上限只可能是异常：补码负数被无符号解析、或帧错位/脏数据。
             # 归零并记录原始值，避免假值进入测量与整车重累加。
-            logger.warning(
-                "点位 %s 读数 %s 超过上限 %s，按 0 处理（原始采样 %s）",
-                self.name, value, VALUE_LIMIT, raw_value,
-            )
+            # print(
+            #     "点位 %s 读数 %s 超过上限 %s，按 0 处理（原始采样 %s）",
+            #     self.name, value, VALUE_LIMIT, raw_value,
+            # )
             raw_value = 0.0
             value = 0.0
         self.raw_value = raw_value
@@ -276,14 +318,12 @@ class VSPTable:
                     read_cmd=read_cmd,
                     zero_cmd=zero_cmd,
                     add=float(add_raw) if add_raw is not None else 0.0,
-                    # 成都静载：所有 VSP 点统一用 head_x 解析，不再按配置文件里的 parser 分流
-                    parser_name="head_x",
+                    # 按配置文件的 parser 分流：weight(称重台) / head_x(压头横向) / laser(激光)
+                    parser_name=parse_parser_name(point_data, name),
                     segs=SegmentMapping.parse(point_data.get("segs")),
                     unit=point_data.get("unit"),
                 )
             )
-            if point.config.parser_name not in PARSERS:
-                raise KeyError(f"{name}: unknown parser {point.config.parser_name!r}")
             self.points[name] = point
 
     def start(self) -> threading.Thread:
@@ -336,14 +376,12 @@ class VSPTable:
                     read_cmd=read_cmd,
                     zero_cmd=zero_cmd,
                     add=float(add_raw) if add_raw is not None else 0.0,
-                    # 成都静载：所有 VSP 点统一用 head_x 解析
-                    parser_name="head_x",
+                    # 按配置文件的 parser 分流：weight(称重台) / head_x(压头横向) / laser(激光)
+                    parser_name=parse_parser_name(point_data, name),
                     segs=SegmentMapping.parse(point_data.get("segs")),
                     unit=point_data.get("unit"),
                 )
             )
-            if point.config.parser_name not in PARSERS:
-                raise KeyError(f"{name}: unknown parser {point.config.parser_name!r}")
             new_points[name] = point
 
         # 原子交换：轮询线程的 for 循环已持有旧 dict 的迭代器，不受影响
@@ -452,7 +490,7 @@ class VSPTable:
                     recv_bytes=self.recv_bytes,
                     cmd=point.config.read_cmd,
                     parser_func=parser_func,
-                    expect_binary=point.config.parser_name != "text_number",
+                    expect_binary=point.config.parser_name not in TEXT_PARSERS,
                 ).read_value()
             except Exception as exc:
                 with self._lock:
@@ -497,7 +535,8 @@ def hex2dis(data: bytes) -> float:
 
     value_bytes = data[-6:-2]
     raw_value = int.from_bytes(value_bytes, byteorder="big", signed=False)
-    return raw_value
+    ret = (raw_value - HEAD_BASE) / 4096 * 6
+    return round(ret,2)
 
 @parser("weight")
 def hex2kg(data: bytes) -> float:
@@ -505,10 +544,37 @@ def hex2kg(data: bytes) -> float:
         raise ValueError(f"hex2dis requires at least 6 bytes, got {len(data)}")
 
     value_bytes = data[-6:-2]
-    raw_value = int.from_bytes(value_bytes, byteorder="big", signed=False)
-    return raw_value
+    ret = int.from_bytes(value_bytes, byteorder="big", signed=False)
+    return round(ret, 2)
 
 @parser("laser")
 def hex2move(data: str) -> float:
-    pass
+    """解析 HL‑G1 激光位移传感器 ``RMD`` 应答，返回测距值(mm)。
+
+    协议（串口服务器透传，指令格式见 utils/laser/read.py）::
+
+        发送: %01#RMD**\\r
+        正常: %01$RMD-0123456**\\r   ->  -012.3456 mm
+        异常: %01!RMD<错误码>**\\r
+
+    数据段为带符号十进制，1 LSB = 0.0001 mm；BCC 位(``**``)与结束符忽略。
+    """
+    raw = bytes(data)
+    text = raw.decode("ascii", errors="ignore").strip()
+    if not text:
+        raise ValueError("laser: empty response")
+
+    idx = text.find("RMD")
+    if idx < 0:
+        raise ValueError(f"laser: RMD not found in response: {text!r}")
+    if "!" in text[:idx]:
+        # MEWTOCOL 异常应答：%01!RMD<错误码>**
+        raise ValueError(f"laser: sensor error response: {text!r}")
+
+    match = re.search(r"[-+]?\d+(?:\.\d+)?", text[idx + 3:])
+    if match is None:
+        raise ValueError(f"laser: no numeric value in response: {text!r}")
+    ret = round(float(match.group()) * LASER_LSB_TO_MM, 1 )
+
+    return ret if -999 < ret < 999 else 999
 
