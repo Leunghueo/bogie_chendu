@@ -10,7 +10,7 @@ from pathlib import Path
 from threading import Event
 from uuid import uuid4
 
-from PySide6.QtCore import QEvent, QObject, QThread, Qt, Signal, QTimer, Slot
+from PySide6.QtCore import QEvent, QObject, QThread, Qt, Signal, QTimer
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -38,7 +38,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from _runtime import bed_section, get_runtime
+from _runtime import get_runtime
 from libs import jobstore
 from wf import NodeStoppedError, WorkflowState
 from wf.base import utc_now
@@ -88,17 +88,19 @@ class StatusDashboard(QFrame):
         ],
     ]
 
-    # 需要后处理的点位及其在 bed.json「原点位置」中的基准键: 显示值 = 原始值 - 基准值
-    # 例: "称重台X位移1" 减 bed.json["原点位置"]["滑台位移1"], ...
+    # 需要显示相对位移的点位及其在 bed.json「原点位置」中的基准键: 显示值 = 原始值 - 基准值
+    # 键必须是 _LED_ROWS 里实际显示的点名:
+    #   第二行第一组是 CAN 点 称重台位移1~4 -> 减 滑台位移N
+    #   第二行第二组是 VSP 点 内测距激光1~4 -> 减 滑台内测距N
     _RELATIVE_POS_OFFSETS: dict[str, str] = {
-        "称重台X位移1": "滑台位移1",
-        "称重台X位移2": "滑台位移2",
-        "称重台X位移3": "滑台位移3",
-        "称重台X位移4": "滑台位移4",
-        "车轮内侧距1": "滑台内测距1",
-        "车轮内侧距2": "滑台内测距2",
-        "车轮内侧距3": "滑台内测距3",
-        "车轮内侧距4": "滑台内测距4",
+        "称重台位移1": "滑台位移1",
+        "称重台位移2": "滑台位移2",
+        "称重台位移3": "滑台位移3",
+        "称重台位移4": "滑台位移4",
+        "内测距激光1": "滑台内测距1",
+        "内测距激光2": "滑台内测距2",
+        "内测距激光3": "滑台内测距3",
+        "内测距激光4": "滑台内测距4",
     }
 
     # 防沉降气缸点动按钮: (显示标题, plc 点位名)
@@ -154,9 +156,14 @@ class StatusDashboard(QFrame):
             row.setAlignment(Qt.AlignVCenter)
             for group_index, group in enumerate(row_groups):
                 for pt_name, title in group:
-                    led = PtLed(pt_name, parent=self, title=title)
-                    if pt_name in self._RELATIVE_POS_OFFSETS:
-                        led.afterUpdate.connect(self._show_relative_pos)
+                    # 在 _RELATIVE_POS_OFFSETS 里的点位由控件自己减基准值, 显示相对位移
+                    led = PtLed(
+                        pt_name,
+                        parent=self,
+                        title=title,
+                        base_key=self._RELATIVE_POS_OFFSETS.get(pt_name, ""),
+                        limit=LIMIT,
+                    )
                     self._leds.append(led)
                     row.addWidget(led)
                 if group_index < len(row_groups) - 1:
@@ -211,40 +218,6 @@ class StatusDashboard(QFrame):
         """)
         self._emergency_btn.clicked.connect(self._on_emergency_stop)
         layout.addWidget(self._emergency_btn, 0, Qt.AlignVCenter)
-
-    @Slot(str)
-    def _show_relative_pos(self, text: str) -> None:
-        """PtLed 后处理: 显示值 = 原始值 - 原点位置基准值; 非数值(ON/OFF/ERR)不处理, 走默认显示.
-
-        原点位置只与试验台有关, 取自 bed.json, 与当前车型/workflow 无关。
-        当相对位移超出 [-limit, limit] 时, 控件背景置红(超限告警);
-        未超限或 limit=None 时, 不改变背景颜色.
-        """
-        led = self.sender()
-        if led is None:
-            return
-        base_key = self._RELATIVE_POS_OFFSETS.get(led._pt_name)
-        if base_key is None:
-            return
-
-        # 从 bed.json 读取原点位置基准值
-        base_pos = bed_section("原点位置")
-        try:
-            offset = float(base_pos[base_key])
-        except (KeyError, TypeError, ValueError):
-            return
-
-        try:
-            value = float(text.split()[0])
-        except (IndexError, ValueError):
-            return
-
-        relative = value - offset
-        led.set_display(f"{relative:.1f} mm")
-
-        # 超限检测: 相对位移超出 [-limit, limit] 时背景置红
-        if not (-LIMIT <= relative <= LIMIT):
-            led.set_bg_color("#ff0000")
 
     def refresh_data(self) -> None:
         """刷新所有点位显示（由 plc_poll 信号触发，在主线程执行）"""

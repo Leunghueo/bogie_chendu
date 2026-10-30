@@ -93,7 +93,7 @@
         "read": "%01#RMD**\r"
       },
       "parser": "laser",
-      "segs": [ ],
+      "segs": [],
       "add": 0.0,
       "unit": "mm"
     },
@@ -113,7 +113,7 @@
         "read": "%01#RMD**\r"
       },
       "parser": "laser",
-      "segs": [ ],
+      "segs": [],
       "add": 0.0,
       "unit": "mm"
     },
@@ -134,7 +134,7 @@
       },
       "parser": "head_x",
       "segs": [],
-      "add": 0.0,
+      "add": -773.0,
       "unit": "mm"
     },
     "压头横向1": {
@@ -144,7 +144,7 @@
       },
       "parser": "head_x",
       "segs": [],
-      "add": 0.0,
+      "add": -1253.0,
       "unit": "mm"
     }
   }

@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt, Signal
 from typing import Callable
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from _runtime import bed_section
 from .pt_source import resolve_point
 
 
@@ -15,6 +16,11 @@ class PtLed(QFrame):
     + BOOL: 显示方式为 `名称 | LED灯 | ON/OFF` (红色=ON, 灰色=OFF)
     + 其他: 显示方式为 `名称 | 数字 | 单位`
     + 读取失败: 显示 ERR (黄色)
+
+    数值型点位可通过 ``base_key`` 直接显示相对位移：给出 ``base_key`` 时
+    显示值 = 原始值 - bed.json「原点位置」[base_key]，单位固定为 mm；
+    ``limit`` 非空且 |相对位移| 超出限值时，数值底色置红告警。
+    基准值每次刷新都重新读取（试验台设置改完即时生效），不依赖工单。
     """
 
     _COLOR_ON = "#ff0000"
@@ -29,12 +35,16 @@ class PtLed(QFrame):
         layout: str = "上下",
         parent: QWidget | None = None,
         title: str = "",
+        base_key: str = "",
+        limit: float | None = None,
     ) -> None:
         super().__init__(parent)
         self._pt_name = pt_name
         self._title_text = title or pt_name
         self._layout_dir = layout
         self._overridden = False
+        self._base_key = base_key
+        self._limit = limit
 
         self._setup_ui()
         self._set_err_state()
@@ -167,6 +177,20 @@ class PtLed(QFrame):
         else:
             self._value_label.setStyleSheet("font-weight: bold;")
 
+    def _relative_value(self, value: Any) -> float | None:
+        """把原始读数换算成相对位移: 原始值 - bed.json「原点位置」基准值。
+
+        没配 base_key 时返回 None（按原值显示）；基准缺失/非数值时也返回 None，
+        不会因为基准没配就把读数弄丢。
+        """
+        if not self._base_key:
+            return None
+        base = bed_section("原点位置").get(self._base_key)
+        try:
+            return float(value) - float(base)
+        except (TypeError, ValueError):
+            return None
+
     def _handle_display(self, display_text: str, default_action: Callable[[], None]) -> None:
         """发射 afterUpdate 信号，并在未被槽函数覆盖时执行默认显示动作。"""
         self._overridden = False
@@ -196,12 +220,23 @@ class PtLed(QFrame):
                 self._handle_display(display_text, lambda: self._set_bool_state(bool(value)))
             else:
                 # plc INT/REAL/WORD 与 vsp/can 数值统一按数值格式化
-                if isinstance(value, float):
-                    display_val = f"{value:.1f}"
+                relative = self._relative_value(value)
+                if relative is not None:
+                    full_text = f"{relative:.1f} mm"
                 else:
-                    display_val = str(value)
-                unit = resolved.unit or ""
-                full_text = f"{display_val} {unit}".strip()
+                    if isinstance(value, float):
+                        display_val = f"{value:.1f}"
+                    else:
+                        display_val = str(value)
+                    unit = resolved.unit or ""
+                    full_text = f"{display_val} {unit}".strip()
                 self._handle_display(full_text, lambda: self._set_numeric_state(full_text))
+                # 超限检测: 相对位移超出 [-limit, limit] 时数值底色置红
+                if (
+                    relative is not None
+                    and self._limit is not None
+                    and not (-self._limit <= relative <= self._limit)
+                ):
+                    self.set_bg_color("#ff0000")
         except Exception:
             self._handle_display("ERR", self._set_err_state)
