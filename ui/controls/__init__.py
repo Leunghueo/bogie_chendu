@@ -1,3 +1,4 @@
+from .ptButton import PtButton
 from .ptLed import PtLed
 from .ptSlider import PtSlider
 from .ptToggle import PtToggle
@@ -11,6 +12,7 @@ from .pt_source import (
 )
 
 __all__ = [
+    "PtButton",
     "PtLed",
     "PtSlider",
     "PtToggle",
