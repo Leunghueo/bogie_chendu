@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from _runtime import get_runtime, update_runtime
+from _runtime import get_runtime, reload_bed_data, update_runtime
 
 
 ITEM_KIND_ROLE = Qt.UserRole
@@ -152,6 +152,13 @@ class JsonEditorWidget(QWidget):
         self._sync_data_from_tree()
         payload = self._data if self._data is not None else {}
         target.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        # 保存的是 bed.json 时立刻刷新 runtime 缓存（原点位置/安全检查即时生效）
+        try:
+            bed_config_path = get_runtime()["paths"].get("bed_config")
+            if bed_config_path is not None and target == Path(bed_config_path).resolve():
+                reload_bed_data()
+        except Exception:
+            pass
         self._source_path = target
         self._modified = False
         self._refresh_title()

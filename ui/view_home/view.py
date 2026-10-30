@@ -37,9 +37,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from _runtime import get_runtime
+from _runtime import bed_section, get_runtime
 from wf import NodeStoppedError, WorkflowState
-from ui.controls import PtLed
+from ui.controls import PtButton, PtLed
 from ui.dialog_confirm.view import ConfirmDialog
 from ui.dialog_result.view import ResultDialog
 from ui.wgt_gflow.view import FlowGraph
@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 LIMIT = 5
 
 class StatusDashboard(QFrame):
-    """PLC 实时状态 Dashboard: 复用 ui.controls.PtLed 显示点位, 附带紧急停止按钮."""
+    """PLC 实时状态 Dashboard: 复用 ui.controls.PtLed 显示点位, 前置防沉降气缸点动按钮, 尾部紧急停止按钮."""
 
     # 每行 = [组1, 组2, ...], 每组内为 (pt_name, 显示标题); 组间插入分隔线; 标题为空串时直接显示点位名
     _LED_ROWS: list[list[list[tuple[str, str]]]] = [
@@ -85,18 +85,26 @@ class StatusDashboard(QFrame):
         ],
     ]
 
-    # 需要后处理的点位及其在"原点位置"中的基准键: 显示值 = 原始值 - 基准值
-    # 例: "称重台X位移1" 减 workflow.data["原点位置"]["1位X位移"], ...
+    # 需要后处理的点位及其在 bed.json「原点位置」中的基准键: 显示值 = 原始值 - 基准值
+    # 例: "称重台X位移1" 减 bed.json["原点位置"]["滑台位移1"], ...
     _RELATIVE_POS_OFFSETS: dict[str, str] = {
-        "称重台X位移1": "1位X位移",
-        "称重台X位移2": "2位X位移",
-        "称重台X位移3": "3位X位移",
-        "称重台X位移4": "4位X位移",
-        "车轮内侧距1": "1位内测距",
-        "车轮内侧距2": "2位内测距",
-        "车轮内侧距3": "3位内测距",
-        "车轮内侧距4": "4位内测距",
+        "称重台X位移1": "滑台位移1",
+        "称重台X位移2": "滑台位移2",
+        "称重台X位移3": "滑台位移3",
+        "称重台X位移4": "滑台位移4",
+        "车轮内侧距1": "滑台内测距1",
+        "车轮内侧距2": "滑台内测距2",
+        "车轮内侧距3": "滑台内测距3",
+        "车轮内侧距4": "滑台内测距4",
     }
+
+    # 防沉降气缸点动按钮: (显示标题, plc 点位名)
+    _PT_BUTTONS: list[tuple[str, str]] = [
+        ("防沉开", "防沉降气缸伸出"),
+        ("防沉关", "防沉降气缸收回"),
+    ]
+    #: True = 点动脉冲(置 True 后 2 秒自动写 False); False = 点一下就一直保持
+    _PT_BUTTON_RESET_DELAY = True
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -131,7 +139,8 @@ class StatusDashboard(QFrame):
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(10)
 
-        # 左侧: 上下两行点位数据
+
+        # 中间: 上下两行点位数据
         data_column = QVBoxLayout()
         data_column.setSpacing(6)
 
@@ -154,6 +163,25 @@ class StatusDashboard(QFrame):
         data_column.addStretch(1)
 
         layout.addLayout(data_column, 1)
+
+        # 最前: 防沉降气缸点动按钮（上下排列，尽量少占宽度）
+        button_col = QVBoxLayout()
+        button_col.setSpacing(4)
+        button_col.setAlignment(Qt.AlignVCenter)
+        self._pt_buttons: list[PtButton] = []
+        for title, pt_name in self._PT_BUTTONS:
+            button = PtButton(
+                pt_name,
+                reset_delay=self._PT_BUTTON_RESET_DELAY,
+                parent=self,
+                title=title,
+            )
+            button.setFixedWidth(76)
+            self._pt_buttons.append(button)
+            button_col.addWidget(button)
+        layout.addLayout(button_col, 0)
+        layout.addWidget(vline(), 0)
+
 
         # 紧急停止按钮
         self._emergency_btn = QPushButton("紧急停止", self)
@@ -185,6 +213,7 @@ class StatusDashboard(QFrame):
     def _show_relative_pos(self, text: str) -> None:
         """PtLed 后处理: 显示值 = 原始值 - 原点位置基准值; 非数值(ON/OFF/ERR)不处理, 走默认显示.
 
+        原点位置只与试验台有关, 取自 bed.json, 与当前车型/workflow 无关。
         当相对位移超出 [-limit, limit] 时, 控件背景置红(超限告警);
         未超限或 limit=None 时, 不改变背景颜色.
         """
@@ -195,11 +224,8 @@ class StatusDashboard(QFrame):
         if base_key is None:
             return
 
-        # 从工作流数据中读取原点位置基准值
-        workflow = get_runtime().get("wf")
-        if workflow is None:
-            return
-        base_pos = workflow.data.get("原点位置", {})
+        # 从 bed.json 读取原点位置基准值
+        base_pos = bed_section("原点位置")
         try:
             offset = float(base_pos[base_key])
         except (KeyError, TypeError, ValueError):
@@ -219,6 +245,8 @@ class StatusDashboard(QFrame):
 
     def refresh_data(self) -> None:
         """刷新所有点位显示（由 plc_poll 信号触发，在主线程执行）"""
+        for button in self._pt_buttons:
+            button.update()
         for led in self._leds:
             led.update()
 

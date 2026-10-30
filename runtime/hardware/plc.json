@@ -168,7 +168,7 @@
       ],
       "unit": "mm",
       "desc": "4000-20000",
-      "show": true
+      "show": false
     },
     "称重台X位移2": {
       "io": "i",
@@ -181,7 +181,7 @@
       ],
       "unit": "mm",
       "desc": "4000-20000",
-      "show": true
+      "show": false
     },
     "称重台X位移3": {
       "io": "i",
@@ -194,7 +194,7 @@
       ],
       "unit": "mm",
       "desc": "4000-20000",
-      "show": true
+      "show": false
     },
     "称重台X位移4": {
       "io": "i",
@@ -207,7 +207,7 @@
       ],
       "unit": "mm",
       "desc": "4000-20000",
-      "show": true
+      "show": false
     },
     "车轮内侧距1": {
       "io": "i",
@@ -220,7 +220,7 @@
       ],
       "unit": "mm",
       "desc": "4000-20000",
-      "show": true
+      "show": false
     },
     "车轮内侧距2": {
       "io": "i",
@@ -233,7 +233,7 @@
       ],
       "unit": "mm",
       "desc": "4000-20000",
-      "show": true
+      "show": false
     },
     "车轮内侧距3": {
       "io": "i",
@@ -246,7 +246,7 @@
       ],
       "unit": "mm",
       "desc": "4000-20000",
-      "show": true
+      "show": false
     },
     "车轮内侧距4": {
       "io": "i",
@@ -259,7 +259,7 @@
       ],
       "unit": "mm",
       "desc": "4000-20000",
-      "show": true
+      "show": false
     },
     "轮重测量1": {
       "io": "i",
@@ -272,7 +272,7 @@
       ],
       "unit": "t",
       "desc": "4000-20000",
-      "show": true
+      "show": false
     },
     "轮重测量2": {
       "io": "i",
@@ -285,7 +285,7 @@
       ],
       "unit": "t",
       "desc": "4000-20000",
-      "show": true
+      "show": false
     },
     "轮重测量3": {
       "io": "i",
@@ -298,7 +298,7 @@
       ],
       "unit": "t",
       "desc": "4000-20000",
-      "show": true
+      "show": false
     },
     "轮重测量4": {
       "io": "i",
@@ -311,7 +311,7 @@
       ],
       "unit": "t",
       "desc": "4000-20000",
-      "show": true
+      "show": false
     },
     "开始试验@完成": {
       "io": "i",
@@ -793,7 +793,7 @@
       "desc": "报警",
       "show": false
     },
-    "1位称重台横向移动完成信号": {
+    "1位称重台横向移动@完成": {
       "io": "i",
       "type": "BOOL",
       "addr-2byte": "28.06",
@@ -803,7 +803,7 @@
       "desc": "无",
       "show": false
     },
-    "2位称重台横向移动完成信号": {
+    "2位称重台横向移动@完成": {
       "io": "i",
       "type": "BOOL",
       "addr-2byte": "28.07",
@@ -813,7 +813,7 @@
       "desc": "无",
       "show": false
     },
-    "3位称重台横向移动完成信号": {
+    "3位称重台横向移动@完成": {
       "io": "i",
       "type": "BOOL",
       "addr-2byte": "28.08",
@@ -823,7 +823,7 @@
       "desc": "无",
       "show": false
     },
-    "4位称重台横向移动完成信号": {
+    "4位称重台横向移动@完成": {
       "io": "i",
       "type": "BOOL",
       "addr-2byte": "28.09",
@@ -833,7 +833,7 @@
       "desc": "无",
       "show": false
     },
-    "1位称重台纵向移动完成信号": {
+    "1位称重台纵向移动@完成": {
       "io": "i",
       "type": "BOOL",
       "addr-2byte": "28.10",
@@ -843,7 +843,7 @@
       "desc": "无",
       "show": false
     },
-    "2位称重台纵向移动完成信号": {
+    "2位称重台纵向移动@完成": {
       "io": "i",
       "type": "BOOL",
       "addr-2byte": "28.11",
@@ -853,7 +853,7 @@
       "desc": "无",
       "show": false
     },
-    "3位称重台纵向移动完成信号": {
+    "3位称重台纵向移动@完成": {
       "io": "i",
       "type": "BOOL",
       "addr-2byte": "28.12",
@@ -863,7 +863,7 @@
       "desc": "无",
       "show": false
     },
-    "4位称重台纵向移动完成信号": {
+    "4位称重台纵向移动@完成": {
       "io": "i",
       "type": "BOOL",
       "addr-2byte": "28.13",
@@ -873,7 +873,7 @@
       "desc": "无",
       "show": false
     },
-    "加载头横向移动完成信号": {
+    "加载头横向移动@完成": {
       "io": "i",
       "type": "BOOL",
       "addr-2byte": "28.14",
@@ -1027,16 +1027,6 @@
       "io": "i",
       "type": "BOOL",
       "addr-2byte": "29.14",
-      "add": null,
-      "segs": null,
-      "unit": "",
-      "desc": "无",
-      "show": false
-    },
-    "预留": {
-      "io": "i",
-      "type": "BOOL",
-      "addr-2byte": "29.15",
       "add": null,
       "segs": null,
       "unit": "",
@@ -1598,7 +1588,7 @@
       "type": "INT",
       "addr-2byte": "48",
       "add": 0.0,
-      "segs": [],
+      "segs": ["10@1"],
       "unit": "",
       "desc": "直接写数,10对应1mm",
       "show": true
@@ -1608,7 +1598,7 @@
       "type": "INT",
       "addr-2byte": "49",
       "add": 0.0,
-      "segs": [],
+      "segs": ["10@1"],
       "unit": "",
       "desc": "直接写数,10对应1mm",
       "show": true
@@ -2193,7 +2183,7 @@
       "segs": null,
       "unit": "",
       "desc": "无",
-      "show": false
+      "show": true
     },
     "防沉降气缸收回": {
       "io": "o",
@@ -2203,7 +2193,7 @@
       "segs": null,
       "unit": "",
       "desc": "无",
-      "show": false
+      "show": true
     },
     "清除故障": {
       "io": "o",

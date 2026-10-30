@@ -189,7 +189,7 @@ class VSPPoint:
         self.updated_at = time.time()
 
     def mark_error(self, error: str) -> None:
-        print("vsp err")
+        # print("vsp err")
         self.value = None
         self.alive = False
         self.error = error

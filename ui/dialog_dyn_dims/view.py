@@ -7,7 +7,7 @@ from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget, QPushButton
 
-from _runtime import get_runtime
+from _runtime import bed_section, get_runtime
 from ui.dialog_fit.view import Window as FitDialog
 
 from ._view import Ui_Form
@@ -223,13 +223,14 @@ class Window(QWidget):
 
             cur_flow_data = self.runtime.get("wf")
             if cur_flow_data:
-                base_pos = cur_flow_data.data["原点位置"]
+                # 原点位置只与试验台有关、与车型无关，统一从 bed 读
+                base_pos = bed_section("原点位置")
                 bogie_spec = cur_flow_data.data["转向架数据"]
 
-                _data13 = (bench_x_values[0]-base_pos["1位X位移"]) + (bench_x_values[2]-base_pos["3位X位移"]) + bogie_spec["轴距"]
-                _data24 = (bench_x_values[1]-base_pos["2位X位移"]) + (bench_x_values[3]-base_pos["4位X位移"]) + bogie_spec["轴距"]
-                _data12 = (bench_y_values[0]-base_pos["1位内测距"]) + (bench_y_values[1]-base_pos["2位内测距"]) + bogie_spec["内侧距"]
-                _data34 = (bench_y_values[2]-base_pos["3位内测距"]) + (bench_y_values[3]-base_pos["4位内测距"]) + bogie_spec["内侧距"]
+                _data13 = (bench_x_values[0]-base_pos["滑台位移1"]) + (bench_x_values[2]-base_pos["滑台位移3"]) + bogie_spec["轴距"]
+                _data24 = (bench_x_values[1]-base_pos["滑台位移2"]) + (bench_x_values[3]-base_pos["滑台位移4"]) + bogie_spec["轴距"]
+                _data12 = (bench_y_values[0]-base_pos["滑台内测距1"]) + (bench_y_values[1]-base_pos["滑台内测距2"]) + bogie_spec["内侧距"]
+                _data34 = (bench_y_values[2]-base_pos["滑台内测距3"]) + (bench_y_values[3]-base_pos["滑台内测距4"]) + bogie_spec["内侧距"]
 
                 self._set_label_value(self.ui.l24_cal, round(_data24,3))
                 self._set_label_value(self.ui.l13_cal, round(_data13,3))

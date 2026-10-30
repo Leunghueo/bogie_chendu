@@ -12,7 +12,10 @@ class DemoGuard(GuardBase):
 
     def check(self) -> GuardResult | None:
         dp = self.plc.read("加载压力1")- self.data.get("加载压力1")
-        p_lim = self.workflow.data.get("安全检查").get('压力波动上限')
+        # 安全检查限值只与试验台有关, 取自 bed.json; 没配该限值就跳过检查
+        p_lim = self.safety_limits.get('压力波动上限')
+        if p_lim is None:
+            return None
         if abs(dp)>p_lim:
             return GuardResult(
                 name=self.name,

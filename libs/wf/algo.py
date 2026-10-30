@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from .base import WorkflowError
-from _runtime import get_runtime
+from _runtime import bed_section, get_runtime
 import logging
 import math
 from datetime import datetime
@@ -278,9 +278,10 @@ def _fix_enabled() -> bool:
 @register_algo("cal_press_trail")
 async def cal_press_trail(node: "Node", workflow: "Workflow", data: Any) -> Any:
     plc = get_runtime().get("plc")
+    # 原点位置只与试验台有关、与车型无关，统一从 bed 读
+    base_pos = bed_section("原点位置")
     cur_flow_data = get_runtime().get("wf")
     if cur_flow_data:
-        base_pos = cur_flow_data.data["原点位置"]
         bogie_spec = cur_flow_data.data["转向架数据"]
     else:
         logging.error("工作流数据缺失!")
@@ -319,15 +320,15 @@ async def cal_press_trail(node: "Node", workflow: "Workflow", data: Any) -> Any:
 
     # 13轴距
     _data = workflow.data["结果数据"]["1-3位轴距"]
-    _d1 = plc.read("称重台X位移1")-base_pos["1位X位移"]
-    _d2 = plc.read("称重台X位移3")-base_pos["3位X位移"]
+    _d1 = plc.read("称重台X位移1")-base_pos["滑台位移1"]
+    _d2 = plc.read("称重台X位移3")-base_pos["滑台位移3"]
     _cal = bogie_spec["轴距"]+(_d1+_d2)
     workflow.data["结果数据"]["1-3位轴距"]["测量值"] = round(_cal, 2)
 
     # 24轴距
     _data = workflow.data["结果数据"]["2-4位轴距"]
-    _d1 = plc.read("称重台X位移2")-base_pos["2位X位移"]
-    _d2 = plc.read("称重台X位移4")-base_pos["4位X位移"]
+    _d1 = plc.read("称重台X位移2")-base_pos["滑台位移2"]
+    _d2 = plc.read("称重台X位移4")-base_pos["滑台位移4"]
     _cal = bogie_spec["轴距"]+(_d1+_d2)
     workflow.data["结果数据"]["2-4位轴距"]["测量值"] = round(_cal, 2)
 

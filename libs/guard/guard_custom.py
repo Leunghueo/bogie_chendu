@@ -31,10 +31,8 @@ class LiftRailGuard(GuardBase):
 
         diff = max(valid_values) - min(valid_values)
 
-        wf = self.workflow
-        if wf is None:
-            return None
-        limits = wf.data.get("安全检查", {})
+        # 安全检查限值只与试验台有关，取自 bed.json
+        limits = self.safety_limits
         limit = limits.get("举升轨高度差限值", 50)
 
         if abs(diff) > limit:
@@ -65,10 +63,8 @@ class LoadCylinderGuard(GuardBase):
         d1 = plc.read("加载头垂向位移1")
         d2 = plc.read("加载头垂向位移2")
 
-        wf = self.workflow
-        if wf is None:
-            return None
-        limits = wf.data.get("安全检查", {})
+        # 安全检查限值只与试验台有关，取自 bed.json
+        limits = self.safety_limits
         p_limit = limits.get("加载缸压差限值", 100)
         d_limit = limits.get("加载缸位移差限值", 50)
 
@@ -122,10 +118,8 @@ class WeighLoadGuard(GuardBase):
 
         diff = max(valid_values) - min(valid_values)
 
-        wf = self.workflow
-        if wf is None:
-            return None
-        limits = wf.data.get("安全检查", {})
+        # 安全检查限值只与试验台有关，取自 bed.json
+        limits = self.safety_limits
         limit = limits.get("称重台载荷限值", 20)
 
         if abs(diff) > limit:

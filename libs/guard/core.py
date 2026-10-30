@@ -61,6 +61,24 @@ class GuardBase:
             return None
         return _runtime.get("wf")
 
+    @property
+    def bed(self) -> dict[str, Any]:
+        """获取 bed.json（设备级配置）。
+
+        「安全检查」的限值只与试验台有关、与车型无关，已由 bogies.json
+        迁到 bed.json，这里统一从 runtime 的 bed_data 取；缺失返回空 dict。
+        """
+        if _runtime is None:
+            return {}
+        bed_data = _runtime.get("bed_data")
+        return bed_data if isinstance(bed_data, dict) else {}
+
+    @property
+    def safety_limits(self) -> dict[str, Any]:
+        """bed.json 的「安全检查」限值表，缺失返回空 dict。"""
+        limits = self.bed.get("安全检查")
+        return limits if isinstance(limits, dict) else {}
+
     def check(self) -> GuardResult | None:
         """
         执行安全检查（无参数版本）

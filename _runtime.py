@@ -24,6 +24,31 @@ def get_runtime() -> dict[str, Any]:
         raise RuntimeError("程序运行时未初始化")
     return RUNTIME
 
+
+def get_bed_data() -> dict[str, Any]:
+    """bed.json 内容：只与试验台有关、与车型无关的数据（设备编号 / 原点位置 / 安全检查...）。
+
+    原来「原点位置」「安全检查」放在 bogies.json 里随车型带，现统一归到 bed。
+    未初始化或缺失时返回空 dict，调用方按缺省处理。
+    """
+    data = RUNTIME.get("bed_data")
+    return data if isinstance(data, dict) else {}
+
+
+def bed_section(name: str) -> dict[str, Any]:
+    """取 bed.json 里的一个配置段（"原点位置" / "安全检查"），缺失返回空 dict。"""
+    section = get_bed_data().get(name)
+    return section if isinstance(section, dict) else {}
+
+
+def reload_bed_data() -> dict[str, Any]:
+    """重新从 bed.json 载入并刷新 runtime（UI 里改完 bed 配置后调用）。"""
+    global bed_data
+    with open(bed_config_path, "r", encoding="utf-8") as f:
+        bed_data = json.load(f)
+    RUNTIME["bed_data"] = bed_data
+    return bed_data
+
 BASE_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
 config = configparser.ConfigParser()
 config.read(BASE_DIR / "app.ini", encoding="utf-8")
