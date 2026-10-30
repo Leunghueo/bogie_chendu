@@ -164,13 +164,15 @@ def upsert_snapshot(
     logs: list[dict[str, Any]] | None,
     started_at: str | None,
     finished_at: str | None,
+    finished_at_clear: bool = False,
 ) -> None:
     """把一次作业的当前完整快照整块写入对应行 (不存在则先建行).
 
     由工作流运行期在每个落盘时机调用: 所有 JSON 列均按内存现状整块覆盖,
     单事务提交; summary/air_curve 由调用方从日志现状推导后传入.
     started_at/finished_at 传 None 表示保持库中现值 (COALESCE), 避免后写的
-    批量更新把已经记录的开始/结束时间冲掉.
+    批量更新把已经记录的开始/结束时间冲掉. finished_at_clear=True 时强制
+    把 finished_at 置空 (同一任务重新开始试验时用, 旧的结束时间不再有效).
     """
     ensure_schema(db_path)
     with _connect(db_path) as conn:
@@ -191,7 +193,8 @@ def upsert_snapshot(
         conn.execute(
             f"UPDATE {TABLE} SET name=?, type=?, user=?, state=?, cur_node=?, "
             "meta=?, data=?, summary=?, air_curve=?, logs=?, "
-            "started_at=COALESCE(?, started_at), finished_at=COALESCE(?, finished_at) "
+            "started_at=COALESCE(?, started_at), "
+            "finished_at=CASE WHEN ? THEN NULL ELSE COALESCE(?, finished_at) END "
             "WHERE id=?",
             (
                 name,
@@ -205,6 +208,7 @@ def upsert_snapshot(
                 _dumps(air_curve),
                 _dumps(logs or []),
                 normalize_time(started_at) if started_at else None,
+                1 if finished_at_clear else 0,
                 normalize_time(finished_at) if finished_at else None,
                 job_id,
             ),

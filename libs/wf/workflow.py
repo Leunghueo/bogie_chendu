@@ -66,6 +66,7 @@ class Workflow:
         self._log_active = False
         self._started_at: str | None = None
         self._finished_at: str | None = None
+        self._clear_finished = False
         self.flags = {
             "循环起点": None,
             "循环次数": None,
@@ -306,6 +307,8 @@ class Workflow:
         if self._started_at is None:
             self._started_at = _job_local_now()
         self._finished_at = None
+        # 重新开始试验时, 库里旧的 finished_at 必须清掉 (本次运行尚未结束)
+        self._clear_finished = True
         try:
             self._persist_job_snapshot()
             self._log_active = True
@@ -374,7 +377,9 @@ class Workflow:
             logs=list(self.logs),
             started_at=self._started_at,
             finished_at=self._finished_at,
+            finished_at_clear=self._clear_finished,
         )
+        self._clear_finished = False
 
     def _resolve_next(self, current_node: Node, act_next_node_id: str | None) -> str:
         if act_next_node_id is not None:

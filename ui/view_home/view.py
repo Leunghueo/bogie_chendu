@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
 from _runtime import bed_section, get_runtime
 from libs import jobstore
 from wf import NodeStoppedError, WorkflowState
+from wf.base import utc_now
 from ui.controls import PtButton, PtLed
 from ui.dialog_confirm.view import ConfirmDialog
 from ui.dialog_result.view import ResultDialog
@@ -1652,6 +1653,7 @@ class Window(QWidget):
         self.workflow_list.setColumnWidth(2, 120)
         self.workflow_list.setColumnWidth(3, 110)
         self.workflow_list.currentItemChanged.connect(self._switch_workflow)
+        self.workflow_list.itemDoubleClicked.connect(self._on_workflow_double_clicked)
         layout.addWidget(self.workflow_list, 1)
         run_row = QHBoxLayout()
         self.start_flow_btn = QPushButton("开始试验", panel)
@@ -1918,6 +1920,10 @@ class Window(QWidget):
             return "未完成(停止)", self._state_color("unfinished")
         if state == WorkflowState.ERROR:
             return "未完成(故障)", self._state_color("error")
+        job = self._db_jobs.get(str(workflow.id))
+        if job is not None and job.get("started_at"):
+            # 重建出来的待运行对象: 显示它在库里的真实历史状态 (停止/中断)
+            return self._job_state_display(job)
         return "未开始", self._state_color("idle")
 
     def _job_state_display(self, job) -> tuple[str, QColor]:
@@ -2000,7 +2006,7 @@ class Window(QWidget):
         if instance is not None:
             state = instance["workflow"].state
             job = self._db_jobs.get(str(instance["id"]))
-            startable = state == WorkflowState.IDLE
+            startable = state in (WorkflowState.IDLE, WorkflowState.STOPPED)
             deletable = state == WorkflowState.IDLE and not (job and job.get("started_at"))
         elif self.current_workflow_id is not None:
             job = self._db_jobs.get(str(self.current_workflow_id))
@@ -2017,12 +2023,13 @@ class Window(QWidget):
         if instance is None and workflow_id is not None:
             self._refresh_db_jobs()
             job = self._db_jobs.get(str(workflow_id))
-            if (
-                job is not None
-                and str(job.get("state") or "") == jobstore.STATE_IDLE
-                and not job.get("started_at")
+            if job is not None and str(job.get("state") or "") in (
+                jobstore.STATE_IDLE,
+                jobstore.STATE_STOPPED,
+                jobstore.STATE_RUNNING,
             ):
-                # 未开始的当天工单: 按原 id 重建为可运行对象
+                # 未开始/已停止/被中断的当天工单: 按原 id 重建为可运行对象,
+                # 可在此基础上重新试验 (state=执行中 且无内存实例必然是残留)
                 if self._rebuild_workflow_from_job(job):
                     return
                 instance = self._find_workflow_instance(workflow_id)
@@ -2036,7 +2043,7 @@ class Window(QWidget):
                 self.workflow_panel._prefill_node_table([])
                 self._refresh_workflow_actions()
                 return
-            # 已开始过的作业: 只读记录, 不重建、不允许再次启动
+            # 已完成/故障的作业: 只读记录, 不重建、不允许再次启动
             self.current_workflow_id = str(job["id"])
             self.runtime["wf"] = None
             self.workflow_panel.set_workflow_instance(None)
@@ -2110,6 +2117,91 @@ class Window(QWidget):
             return
         self._set_current_workflow(str(id_item.data(Qt.UserRole)))
         self._set_fault("")
+
+    def _on_workflow_double_clicked(self, item) -> None:
+        if item is None or self.workflow_panel.is_running():
+            return
+        id_item = self.workflow_list.item(item.row(), 0)
+        if id_item is None:
+            return
+        job_id = str(id_item.data(Qt.UserRole) or "")
+        if job_id:
+            self._show_job_result(job_id)
+
+    def _show_job_result(self, job_id: str) -> None:
+        """弹出 dialog_result 显示该任务当前的结果数据 (作业库 summary 字段).
+
+        与 history 页补录同一写法: 对话框确认后, 整块更新 summary/meta
+        两列并把补录条目并入 logs 留痕; 取消则什么都不写.
+        """
+        job = self._db_jobs.get(job_id)
+        if job is None:
+            try:
+                job = jobstore.get_job(self._job_db_path(), job_id)
+            except Exception:
+                logger.exception("读取作业记录失败: id=%s", job_id)
+                job = None
+        if job is None:
+            QMessageBox.information(self, "查看结果", "未找到该任务的作业记录")
+            return
+        summary = job.get("summary")
+        if not isinstance(summary, dict) or not summary:
+            QMessageBox.information(self, "查看结果", "该任务尚无结果数据")
+            return
+        result_data = copy.deepcopy(summary)
+        items = [
+            (name, item)
+            for name, item in result_data.items()
+            if isinstance(item, dict) and item.get("打印", False)
+        ]
+        if not items:
+            items = [
+                (name, item) for name, item in result_data.items() if isinstance(item, dict)
+            ]
+        if not items:
+            QMessageBox.information(self, "查看结果", "该任务没有可显示的结果数据")
+            return
+        meta = dict(job.get("meta") or {})
+        dialog = ResultDialog(
+            items,
+            self,
+            result_store=result_data,
+            checker=str(meta.get("互检员") or ""),
+        )
+        dialog.setWindowTitle(f"结果数据 - {job.get('name') or ''}")
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        meta["互检员"] = dialog.checker
+        try:
+            ok = jobstore.amend_job(
+                self._job_db_path(),
+                job_id,
+                summary=result_data,
+                meta=meta,
+                entries=[
+                    {
+                        "消息源": "补录",
+                        "event": "summary",
+                        "timestamp": utc_now(),
+                        "state": "完成",
+                        "extra": result_data,
+                    },
+                    {
+                        "消息源": "补录",
+                        "event": "meta_update",
+                        "timestamp": utc_now(),
+                        "state": "完成",
+                        "meta": meta,
+                    },
+                ],
+            )
+            if not ok:
+                raise RuntimeError("作业记录不存在")
+        except Exception:
+            logger.exception("查看结果回写作业库失败: id=%s", job_id)
+            QMessageBox.critical(self, "保存失败", "结果数据回写作业库失败, 详情见当天日志")
+            return
+        self._load_workflow_list()
 
     def _refresh_current_flow_label(self) -> None:
         instance = self._current_workflow_instance()
@@ -2222,9 +2314,9 @@ class Window(QWidget):
         instance = self._current_workflow_instance()
         if instance is None:
             return
-        # 已开始过的工单 (含已完成/停止/故障) 不允许从列表再次启动,
-        # 避免同一条作业记录被重复运行覆盖
-        if instance["workflow"].state != WorkflowState.IDLE:
+        # 已完成/故障的工单不允许再次启动; 未开始与已停止的可重新试验,
+        # 在同一条作业记录上继续 (logs/summary 按本次运行整块刷新)
+        if instance["workflow"].state not in (WorkflowState.IDLE, WorkflowState.STOPPED):
             return
         self.workflow_panel.start_workflow()
 
