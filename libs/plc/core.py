@@ -143,14 +143,12 @@ class PLCPoint:
         return _value
 
     def write(self, value: Any, table: "PLCPointTable") -> None:
-        print(f"[write] {self.name}: point_type={self.point_type}, value={value}")
         if self.point_type == "BOOL":
             table.write_bool_point(self, self._validate_bool(value))
         else:
             if self.point_type == "INT":
+                # INT 为有符号：负数按补码下发（_encode_registers 内部 & 0xFFFF）
                 value = self._to_raw_value(value, table)
-                value = abs(value)  # 他们的PLC点位都是INT且正数
-                print(f"[write] {self.name}: after _to_raw_value, value={value}")
             elif self.point_type == "WORD":
                 value = int(value)
             table.write_registers(self.address.word, self._encode_registers(value))
@@ -159,14 +157,8 @@ class PLCPoint:
         """将用户输入的真值转换为 PLC 原始值"""
         float_value = float(value)
         segs = self._get_reference_segs(table)
-        print(f"[_to_raw_value] {self.name}: value={float_value}, segs_ref={self._segs_ref}, add={self.add}")
-        print(f"[_to_raw_value] segs.segments={segs.segments}")
         # 公共换算：真值 -> 原始值（apply_reverse 后 +add，与原行为一致）
-        raw = RawValueConverter(segs=segs, add=self.add).to_raw(float_value)
-        print(f"[_to_raw_value] after apply_reverse+add: raw={raw}")
-        result = int(raw)
-        print(f"[_to_raw_value] final: raw + add = {raw} + {self.add} = {result}")
-        return result
+        return int(RawValueConverter(segs=segs, add=self.add).to_raw(float_value))
 
     def _get_reference_segs(self, table: "PLCPointTable"):
         """
@@ -607,7 +599,6 @@ class PLCPointTable:
         if not actlist:
             return
 
-        print(actlist)
         self._action_stop_event.clear()
         normalized_actlist: list[BaseAct] = []
         for each_raw in actlist:
@@ -650,7 +641,6 @@ class PLCPointTable:
         
 
     def _process_one_act(self, act: BaseAct, watch_done: bool = True) -> None:
-        print(f"********{act.pt_name}---{act.value}---{act.reset}")
         self._act(act.pt_name, act.value, act.reset, watch_done=watch_done)
 
     # ------------------------------------------------------------------ #
@@ -804,7 +794,10 @@ class PLCPointTable:
     def write_bool_point(self, point: PLCPoint, value: bool) -> None:
         with self._io_lock:
             if not self._ensure_connected_locked():
-                logging.error(f"PLC通讯失败,地址[{address}]写入失败!")
+                logging.error(
+                    "PLC通讯失败,点位[%s]地址[%s.%s]写入失败!",
+                    point.name, point.address.word, point.address.bit,
+                )
             try:
                 self._client.write_bool_point(point, value)
             except OSError:
@@ -977,8 +970,6 @@ class PLCPointTable:
 
     def _poll_loop(self) -> None:
         interval = self.poll_interval_ms / 1000.0
-        print(f"plc interval: {interval}")
-
         while not self._stop_event.is_set():
             started_at = time.time()
             self.poll_once()
@@ -1002,7 +993,7 @@ class PLCPointTable:
         try:
             self._client.open()
         except Exception as exc:
-            print(f"重连接plc失败: {exc}")
+            logging.warning("重连接plc失败: %s", exc)
             return False
         return True
 

@@ -132,7 +132,7 @@
       "segs": [],
       "unit": "mm",
       "desc": "4000-20000",
-      "show": true
+      "show": false
     },
     "加载头横向位移2": {
       "io": "i",
@@ -142,7 +142,7 @@
       "segs": [],
       "unit": "mm",
       "desc": "4000-20000",
-      "show": true
+      "show": false
     },
     "液压油温": {
       "io": "i",
@@ -1600,8 +1600,8 @@
       "add": 0.0,
       "segs": [],
       "unit": "",
-      "desc": "4000-20000PLCAD",
-      "show": false
+      "desc": "直接写数,10对应1mm",
+      "show": true
     },
     "设定2位加载头横向移动目标位置": {
       "io": "o",
@@ -1610,8 +1610,8 @@
       "add": 0.0,
       "segs": [],
       "unit": "",
-      "desc": "4000-20000PLCAD",
-      "show": false
+      "desc": "直接写数,10对应1mm",
+      "show": true
     },
     "设定加载头1加载力": {
       "io": "o",
@@ -2263,7 +2263,7 @@
       "segs": null,
       "unit": "",
       "desc": "无",
-      "show": false
+      "show": true
     },
     "1位称重单元横向移动启动信号": {
       "io": "o",
