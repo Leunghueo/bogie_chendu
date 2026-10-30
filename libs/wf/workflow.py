@@ -12,7 +12,11 @@ from typing import Any
 from uuid import uuid4
 
 from _runtime import get_runtime
-from logger import append_workflow_log_entries, get_workflow_log_path, initialize_workflow_log
+
+try:
+    from jobstore import local_now as _job_local_now, upsert_snapshot as _job_upsert_snapshot
+except ModuleNotFoundError:  # pragma: no cover - fallback for package imports
+    from libs.jobstore import local_now as _job_local_now, upsert_snapshot as _job_upsert_snapshot
 from .base import EventEmitter, NodeStoppedError, WorkflowError, WorkflowState, utc_now
 from .node import ConfirmHandler, LoopHandler, Node, ResultHandler, SelectHandler
 
@@ -60,6 +64,8 @@ class Workflow:
         self.logs: list[dict[str, Any]] = []
         self._log_path: Path | None = None
         self._log_active = False
+        self._started_at: str | None = None
+        self._finished_at: str | None = None
         self.flags = {
             "循环起点": None,
             "循环次数": None,
@@ -291,39 +297,84 @@ class Workflow:
         self.events.emit(event_name, workflow=self, **extra)
 
     def _initialize_workflow_log(self) -> None:
-        workflow_type = str(self.meta.get("流程") or "")
-        self._log_path = get_workflow_log_path(
-            self.id,
-            self.name,
-            self.ctime,
-            workflow_type,
-        )
-        metadata = {
-            "消息源": "元信息",
-            "id": self.id,
-            "user": str(self.meta.get("用户") or ""),
-            "工作流名称": self.name,
-            "创建时间": self.ctime,
-            "流程类型": workflow_type,
-            "meta": self.meta,
-        }
+        """流程启动时激活作业落库 (bogie.db 的 TblFlowJob 行).
+
+        行在创建工单时已由 home 页建好 (state=待执行); 这里只记录开始时间
+        并把当前快照写入, 行不存在时 upsert 会自动补建.
+        写库失败只记 daily 并停用落库, 不打断正在运行的流程 (与原文件日志一致).
+        """
+        if self._started_at is None:
+            self._started_at = _job_local_now()
+        self._finished_at = None
         try:
-            initialize_workflow_log(self._log_path, metadata)
+            self._persist_job_snapshot()
             self._log_active = True
         except Exception:
             self._log_active = False
-            logger.exception("failed to initialize workflow log: workflow=%s", self.name)
+            logger.exception("failed to initialize workflow job record: workflow=%s", self.name)
 
     def _extend_logs(self, entries: list[dict[str, Any]]) -> None:
         if not entries:
             return
         self.logs.extend(entries)
-        if not self._log_active or self._log_path is None:
+        if not self._log_active:
             return
         try:
-            append_workflow_log_entries(self._log_path, entries)
+            self._persist_job_snapshot()
         except Exception:
-            logger.exception("failed to write workflow logs: workflow=%s", self.name)
+            logger.exception("failed to write workflow job record: workflow=%s", self.name)
+
+    def _job_db_path(self) -> Path:
+        paths = get_runtime().get("paths") or {}
+        db_path = paths.get("db")
+        if db_path is None:
+            raise WorkflowError("runtime paths missing 'db'")
+        return Path(db_path)
+
+    def _last_event_extra(self, event_name: str) -> Any:
+        """从内存日志现状取最后一个指定事件的 extra (summary/air_curve 落库推导用)."""
+        for entry in reversed(self.logs):
+            if isinstance(entry, dict) and entry.get("event") == event_name:
+                extra = entry.get("extra")
+                return extra if isinstance(extra, dict) else None
+        return None
+
+    def persist_job_snapshot(self) -> None:
+        """把当前内存现状整块写入作业行 (fix_report 改名后由 algo 调用).
+
+        summary/air_curve 两列每次都从 logs 现状重新推导, 保证日志里改过名
+        的 summary 与单列字段始终一致.
+        """
+        if self._log_active:
+            self._persist_job_snapshot()
+
+    def _persist_job_snapshot(self) -> None:
+        state_value = self.state.value
+        if state_value != WorkflowState.IDLE.value and self._started_at is None:
+            self._started_at = _job_local_now()
+        if state_value in (
+            WorkflowState.DONE.value,
+            WorkflowState.ERROR.value,
+            WorkflowState.STOPPED.value,
+        ) and self._finished_at is None:
+            self._finished_at = _job_local_now()
+        _job_upsert_snapshot(
+            self._job_db_path(),
+            job_id=str(self.id),
+            created_at=str(self.ctime or ""),
+            name=str(self.name or ""),
+            job_type=str(self.meta.get("流程") or ""),
+            user=str(self.meta.get("用户") or ""),
+            state=state_value,
+            cur_node=self.cur_node.node_id if self.cur_node else None,
+            meta=dict(self.meta or {}),
+            data=self.data,
+            summary=self._last_event_extra("summary"),
+            air_curve=self._last_event_extra("air_curve"),
+            logs=list(self.logs),
+            started_at=self._started_at,
+            finished_at=self._finished_at,
+        )
 
     def _resolve_next(self, current_node: Node, act_next_node_id: str | None) -> str:
         if act_next_node_id is not None:

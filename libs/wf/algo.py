@@ -489,13 +489,13 @@ async def fix_report(node: "Node", workflow: "Workflow", data: Any) -> Any:
 def rename_summary_items(workflow: "Workflow", renames: dict[str, str]) -> None:
     """仅把日志 summary 记录里的测量项改名, 数值与其余内容一律不动.
 
-    内存日志 (workflow.logs) 与已落盘的日志文件同步修改, 保证历史页面/导出报告
-    读到的是改名后的名称; 只重写 summary 行, 其它行原样保留.
+    内存日志 (workflow.logs) 改名后整块重写作业行: summary 单列字段与 logs
+    数组在落库时从 logs 现状重新推导, 保证历史页面/导出报告读到改名后的名称.
     """
     _rename_summary_entries(workflow.logs, renames)
-    path = getattr(workflow, "_log_path", None)
-    if path is not None:
-        _rename_summary_in_file(Path(path), renames)
+    persist = getattr(workflow, "persist_job_snapshot", None)
+    if callable(persist):
+        persist()
 
 
 def _renamed_extra(extra: dict[str, Any], renames: dict[str, str]) -> dict[str, Any] | None:
@@ -523,48 +523,3 @@ def _rename_summary_entries(entries: list[dict[str, Any]], renames: dict[str, st
         renamed = _renamed_extra(extra, renames)
         if renamed is not None:
             entry["extra"] = renamed
-
-
-def _rename_summary_in_file(path: Path, renames: dict[str, str]) -> None:
-    """重写日志文件中的 summary 行(仅改名称), 其余行按原文保留."""
-    try:
-        raw = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        logging.getLogger(__name__).exception("fix_report failed to read log: %s", path)
-        return
-
-    lines: list[str] = []
-    changed = False
-    for line in raw.splitlines():
-        text = line.strip()
-        record = None
-        if text:
-            try:
-                record = json.loads(text)
-            except json.JSONDecodeError:
-                record = None
-        if (
-            not isinstance(record, dict)
-            or record.get("event") != "summary"
-            or not isinstance(record.get("extra"), dict)
-        ):
-            lines.append(line)
-            continue
-        renamed = _renamed_extra(record["extra"], renames)
-        if renamed is None:
-            lines.append(line)
-            continue
-        record["extra"] = renamed
-        lines.append(json.dumps(record, ensure_ascii=False))
-        changed = True
-
-    if not changed:
-        return
-    try:
-        # 先写临时文件再替换: 避免写一半失败把整份日志弄坏
-        temp = path.with_name(path.name + ".tmp")
-        temp.write_text("\n".join(lines) + ("\n" if raw.endswith("\n") else ""), encoding="utf-8")
-        temp.replace(path)
-    except OSError:
-        logging.getLogger(__name__).exception("fix_report failed to rewrite log: %s", path)
-

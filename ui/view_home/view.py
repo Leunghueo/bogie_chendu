@@ -11,6 +11,7 @@ from threading import Event
 from uuid import uuid4
 
 from PySide6.QtCore import QEvent, QObject, QThread, Qt, Signal, QTimer, Slot
+from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -38,6 +39,7 @@ from PySide6.QtWidgets import (
 )
 
 from _runtime import bed_section, get_runtime
+from libs import jobstore
 from wf import NodeStoppedError, WorkflowState
 from ui.controls import PtButton, PtLed
 from ui.dialog_confirm.view import ConfirmDialog
@@ -1522,6 +1524,7 @@ class Window(QWidget):
         self._fault_message = ""
         self._bogie_catalog = self._load_bogie_catalog()
         self.workflow_instances: list[dict[str, object]] = []
+        self._db_jobs: dict[str, dict[str, object]] = {}
         self.current_workflow_id: str | None = None
         self._build_ui()
         self._reload_bogie_options()
@@ -1534,6 +1537,11 @@ class Window(QWidget):
         self._unsubscribe()
         self.shutdown()
         super().closeEvent(event)
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        if hasattr(self, "workflow_list"):
+            self._load_workflow_list()
 
     def shutdown(self) -> None:
         self.workflow_panel.shutdown()
@@ -1631,8 +1639,8 @@ class Window(QWidget):
         action_row.addWidget(self.delete_flow_btn)
         layout.addLayout(action_row)
         layout.addWidget(QLabel("当前工单", panel))
-        self.workflow_list = QTableWidget(0, 3, panel)
-        self.workflow_list.setHorizontalHeaderLabels(["工作流名称", "创建者", "时间"])
+        self.workflow_list = QTableWidget(0, 4, panel)
+        self.workflow_list.setHorizontalHeaderLabels(["工作流名称", "创建者", "时间", "状态"])
         self.workflow_list.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.workflow_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.workflow_list.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -1642,6 +1650,7 @@ class Window(QWidget):
         self.workflow_list.setColumnWidth(0, 160)
         self.workflow_list.setColumnWidth(1, 70)
         self.workflow_list.setColumnWidth(2, 120)
+        self.workflow_list.setColumnWidth(3, 110)
         self.workflow_list.currentItemChanged.connect(self._switch_workflow)
         layout.addWidget(self.workflow_list, 1)
         run_row = QHBoxLayout()
@@ -1748,13 +1757,20 @@ class Window(QWidget):
                 self.flow_combo.setCurrentIndex(index)
         self.flow_combo.blockSignals(False)
 
-    def _build_workflow_from_template(self):
+    def _build_workflow_from_template(self, meta_override=None, job_id=None, job_ctime=None):
 
-        bogie_type = self.bogie_combo.currentText().strip()
-        bogie_pos = self.position_combo.currentText().strip()
-        bogie_flow = self.flow_combo.currentText().strip()
-        train_no = self.car_no_edit.text().strip()
-        axle_no = self.axle_no_edit.text().strip()
+        if meta_override is not None:
+            bogie_type = str(meta_override.get("车型") or "").strip()
+            bogie_pos = str(meta_override.get("位号") or "").strip()
+            bogie_flow = str(meta_override.get("流程") or "").strip()
+            train_no = str(meta_override.get("车号") or "").strip()
+            axle_no = str(meta_override.get("编号") or "").strip()
+        else:
+            bogie_type = self.bogie_combo.currentText().strip()
+            bogie_pos = self.position_combo.currentText().strip()
+            bogie_flow = self.flow_combo.currentText().strip()
+            train_no = self.car_no_edit.text().strip()
+            axle_no = self.axle_no_edit.text().strip()
         if not bogie_type:
             raise ValueError("车型不能为空")
         if not bogie_pos:
@@ -1766,15 +1782,26 @@ class Window(QWidget):
         if not axle_no:
             axle_no = "ID"
 
-        meta = {
-            "车型": bogie_type , 
-            "位号": bogie_pos, 
-            "流程": bogie_flow,
-            "车号": train_no, 
-            "编号": axle_no,
-            "用户": str(self.runtime.get("current_user") or ""),
-            "互检员":""
-        }
+        if meta_override is not None:
+            meta = {
+                "车型": bogie_type,
+                "位号": bogie_pos,
+                "流程": bogie_flow,
+                "车号": train_no,
+                "编号": axle_no,
+                "用户": str(meta_override.get("用户") or ""),
+                "互检员": str(meta_override.get("互检员") or ""),
+            }
+        else:
+            meta = {
+                "车型": bogie_type,
+                "位号": bogie_pos,
+                "流程": bogie_flow,
+                "车号": train_no,
+                "编号": axle_no,
+                "用户": str(self.runtime.get("current_user") or ""),
+                "互检员": "",
+            }
 
         flow_path = self.runtime["paths"]["flow_dir"] / f"{bogie_flow}.json"
         if not flow_path.is_file():
@@ -1784,8 +1811,8 @@ class Window(QWidget):
         worflow_json = json.loads(flow_path.read_text(encoding="utf-8"))
         worflow_json = copy.deepcopy(worflow_json)
         now = datetime.now().isoformat(timespec="seconds")
-        worflow_json["id"] = str(uuid4())
-        worflow_json["ctime"] = now
+        worflow_json["id"] = str(job_id) if job_id else str(uuid4())
+        worflow_json["ctime"] = str(job_ctime) if job_ctime else now
         worflow_json["name"] = f"{meta['车型']}-{meta['位号']}-{meta['车号']}-{meta['编号']}-{bogie_flow}"
         worflow_json["meta"] = meta
 
@@ -1834,17 +1861,190 @@ class Window(QWidget):
             index = self.position_combo.findText(position_name)
             if index >= 0:
                 self.position_combo.setCurrentIndex(index)
+        flow_name = str(meta_payload.get("流程") or "").strip()
+        if flow_name:
+            index = self.flow_combo.findText(flow_name)
+            if index >= 0:
+                self.flow_combo.setCurrentIndex(index)
         self.car_no_edit.setText(car_no)
         self.axle_no_edit.setText(axle_no)
 
+    def _job_db_path(self) -> Path:
+        return Path(self.runtime["paths"]["db"])
+
+    def _refresh_db_jobs(self) -> None:
+        """从作业库加载当天任务 (供左侧列表合并显示与状态判定)."""
+        try:
+            jobs = jobstore.list_jobs(
+                self._job_db_path(), on_date=datetime.now().strftime("%Y-%m-%d")
+            )
+            self._db_jobs = {str(job["id"]): job for job in jobs}
+        except Exception:
+            logger.exception("加载当天作业记录失败")
+            self._db_jobs = {}
+
+    def _state_color(self, kind: str) -> QColor:
+        return {
+            "idle": QColor(158, 158, 158, 90),
+            "running": QColor(33, 150, 243, 90),
+            "done": QColor(76, 175, 80, 100),
+            "unfinished": QColor(255, 152, 0, 110),
+            "error": QColor(244, 67, 54, 120),
+        }[kind]
+
+    def _workflow_has_summary(self, workflow) -> bool:
+        for entry in getattr(workflow, "logs", []) or []:
+            if (
+                isinstance(entry, dict)
+                and entry.get("event") == "summary"
+                and isinstance(entry.get("extra"), dict)
+                and entry["extra"]
+            ):
+                return True
+        job = self._db_jobs.get(str(workflow.id))
+        return bool(job and job.get("summary"))
+
+    def _instance_state_display(self, instance) -> tuple[str, QColor]:
+        """内存中工单的显示状态: (状态文字, 行底色)."""
+        workflow = instance["workflow"]
+        state = workflow.state
+        if state == WorkflowState.RUNNING:
+            return "执行中", self._state_color("running")
+        if state == WorkflowState.DONE:
+            if self._workflow_has_summary(workflow):
+                return "已完成", self._state_color("done")
+            return "未完成(无结果)", self._state_color("unfinished")
+        if state == WorkflowState.STOPPED:
+            return "未完成(停止)", self._state_color("unfinished")
+        if state == WorkflowState.ERROR:
+            return "未完成(故障)", self._state_color("error")
+        return "未开始", self._state_color("idle")
+
+    def _job_state_display(self, job) -> tuple[str, QColor]:
+        """作业库行的显示状态. 库里的"执行中"在本进程没有对应实例时是上次
+        运行被中断的残留, 按未完成显示 (库存值不改)."""
+        state = str(job.get("state") or "")
+        if state == jobstore.STATE_DONE:
+            if job.get("summary"):
+                return "已完成", self._state_color("done")
+            return "未完成(无结果)", self._state_color("unfinished")
+        if state == jobstore.STATE_STOPPED:
+            return "未完成(停止)", self._state_color("unfinished")
+        if state == jobstore.STATE_ERROR:
+            return "未完成(故障)", self._state_color("error")
+        if state == jobstore.STATE_RUNNING:
+            return "未完成(中断)", self._state_color("unfinished")
+        return "未开始", self._state_color("idle")
+
+    def _ordered_task_entries(self) -> list[dict[str, object]]:
+        """合并内存工单与当天作业库行, 按创建时间排序的列表条目."""
+        entries: list[dict[str, object]] = []
+        seen: set[str] = set()
+        for instance in self.workflow_instances:
+            workflow_id = str(instance["id"])
+            seen.add(workflow_id)
+            entries.append(
+                {"id": workflow_id, "instance": instance, "job": self._db_jobs.get(workflow_id)}
+            )
+        for job in self._db_jobs.values():
+            job_id = str(job["id"])
+            if job_id in seen:
+                continue
+            entries.append({"id": job_id, "instance": None, "job": job})
+
+        def _sort_key(entry: dict[str, object]) -> str:
+            instance = entry["instance"]
+            if instance is not None:
+                return str(instance["workflow"].ctime or "").replace("T", " ")
+            job = entry["job"] or {}
+            return str(job.get("created_at") or "")
+
+        entries.sort(key=_sort_key)
+        return entries
+
+    def _rebuild_workflow_from_job(self, job) -> bool:
+        """按作业库行的 meta 与原 id/创建时间重建未开始工单为可运行对象."""
+        try:
+            built = self._build_workflow_from_template(
+                meta_override=dict(job.get("meta") or {}),
+                job_id=str(job["id"]),
+                job_ctime=str(job.get("created_at") or ""),
+            )
+            if not built:
+                return False
+            workflow, flow_path = built
+        except Exception as exc:
+            logger.exception("rebuild workflow from job failed")
+            QMessageBox.warning(self, "加载工单失败", str(exc))
+            return False
+        workflow_id = str(workflow.id)
+        self.workflow_instances.append(
+            {"id": workflow_id, "workflow": workflow, "flow_path": flow_path}
+        )
+        self._set_current_workflow(workflow_id)
+        self._load_workflow_list()
+        self._flow_graph._build_ui()
+        self._flow_graph.update(workflow)
+        logger.info(f"从作业库恢复工单: Name={workflow.name}")
+        return True
+
+    def _refresh_workflow_actions(self) -> None:
+        """按当前选中任务刷新开始/删除按钮: 只有未开始的工单可开始,
+        只有从未开始过的工单可删除 (已产生记录的作业保留在库中)."""
+        if not hasattr(self, "start_flow_btn"):
+            return
+        running = self.workflow_panel.is_running()
+        instance = self._current_workflow_instance()
+        startable = False
+        deletable = False
+        if instance is not None:
+            state = instance["workflow"].state
+            job = self._db_jobs.get(str(instance["id"]))
+            startable = state == WorkflowState.IDLE
+            deletable = state == WorkflowState.IDLE and not (job and job.get("started_at"))
+        elif self.current_workflow_id is not None:
+            job = self._db_jobs.get(str(self.current_workflow_id))
+            if job is not None:
+                deletable = (
+                    str(job.get("state") or "") == jobstore.STATE_IDLE
+                    and not job.get("started_at")
+                )
+        self.start_flow_btn.setEnabled(startable and not running)
+        self.delete_flow_btn.setEnabled(deletable and not running)
+
     def _set_current_workflow(self, workflow_id: str | None) -> None:
         instance = self._find_workflow_instance(workflow_id)
+        if instance is None and workflow_id is not None:
+            self._refresh_db_jobs()
+            job = self._db_jobs.get(str(workflow_id))
+            if (
+                job is not None
+                and str(job.get("state") or "") == jobstore.STATE_IDLE
+                and not job.get("started_at")
+            ):
+                # 未开始的当天工单: 按原 id 重建为可运行对象
+                if self._rebuild_workflow_from_job(job):
+                    return
+                instance = self._find_workflow_instance(workflow_id)
         if instance is None:
-            self.current_workflow_id = None
+            job = self._db_jobs.get(str(workflow_id)) if workflow_id is not None else None
+            if job is None:
+                self.current_workflow_id = None
+                self.runtime["wf"] = None
+                self.workflow_panel.set_workflow_instance(None)
+                self._refresh_current_flow_label()
+                self.workflow_panel._prefill_node_table([])
+                self._refresh_workflow_actions()
+                return
+            # 已开始过的作业: 只读记录, 不重建、不允许再次启动
+            self.current_workflow_id = str(job["id"])
             self.runtime["wf"] = None
             self.workflow_panel.set_workflow_instance(None)
+            self._apply_workflow_meta(job.get("meta") or {})
             self._refresh_current_flow_label()
             self.workflow_panel._prefill_node_table([])
+            self._refresh_workflow_actions()
+            logger.info(f"查看作业记录: Name={job.get('name')}")
             return
         self.current_workflow_id = str(instance["id"])
         workflow = instance["workflow"]
@@ -1853,31 +2053,53 @@ class Window(QWidget):
         self._apply_workflow_meta(workflow.meta)
         self._refresh_current_flow_label()
         self.workflow_panel._prefill_node_table(workflow.get_node_list())
+        self._refresh_workflow_actions()
         logger.info(f"流程切换: Name={workflow.name}")
 
     def _load_workflow_list(self) -> None:
+        self._refresh_db_jobs()
+        entries = self._ordered_task_entries()
         self.workflow_list.blockSignals(True)
         self.workflow_list.setRowCount(0)
         selected_row = -1
-        for row_index, instance in enumerate(self.workflow_instances):
-            workflow = instance["workflow"]
-            flow_path = instance["flow_path"]
+        for row_index, entry in enumerate(entries):
+            instance = entry["instance"]
+            job = entry["job"]
+            if instance is not None:
+                workflow = instance["workflow"]
+                name = str(workflow.name or "当前流程")
+                creator = str(workflow.meta.get("用户") or "")
+                created = str(workflow.ctime or "").replace("T", " ")
+                state_text, color = self._instance_state_display(instance)
+                tooltip = str(instance["flow_path"]) if instance.get("flow_path") is not None else ""
+            else:
+                name = str(job.get("name") or "当前流程")
+                creator = str(job.get("user") or "")
+                created = str(job.get("created_at") or "")
+                state_text, color = self._job_state_display(job)
+                tooltip = ""
             self.workflow_list.insertRow(row_index)
-            item = QTableWidgetItem(str(workflow.name or "当前流程"))
-            if flow_path is not None:
-                item.setToolTip(str(flow_path))
-            item.setData(Qt.UserRole, str(instance["id"]))
-            creator_item = QTableWidgetItem(str(workflow.meta.get("用户") or ""))
-            created_item = QTableWidgetItem(str(workflow.ctime or "").replace("T", " "))
+            item = QTableWidgetItem(name)
+            if tooltip:
+                item.setToolTip(tooltip)
+            item.setData(Qt.UserRole, entry["id"])
+            creator_item = QTableWidgetItem(creator)
+            created_item = QTableWidgetItem(created)
+            state_item = QTableWidgetItem(state_text)
+            brush = QBrush(color)
+            for cell in (item, creator_item, created_item, state_item):
+                cell.setBackground(brush)
             self.workflow_list.setItem(row_index, 0, item)
             self.workflow_list.setItem(row_index, 1, creator_item)
             self.workflow_list.setItem(row_index, 2, created_item)
-            if str(instance["id"]) == self.current_workflow_id:
+            self.workflow_list.setItem(row_index, 3, state_item)
+            if entry["id"] == self.current_workflow_id:
                 selected_row = row_index
         if selected_row >= 0:
             self.workflow_list.setCurrentCell(selected_row, 0)
         self.workflow_list.blockSignals(False)
         self._refresh_current_flow_label()
+        self._refresh_workflow_actions()
 
     def _switch_workflow(self, current: QTableWidgetItem | None, previous: QTableWidgetItem | None) -> None:
         del previous
@@ -1891,11 +2113,19 @@ class Window(QWidget):
 
     def _refresh_current_flow_label(self) -> None:
         instance = self._current_workflow_instance()
-        if instance is None:
-            self.current_flow_label.setText("当前流程: -")
+        if instance is not None:
+            name = str(instance["workflow"].name or "当前流程")
+            self.current_flow_label.setText(f"当前流程: {name}")
             return
-        name = str(instance["workflow"].name or "当前流程")
-        self.current_flow_label.setText(f"当前流程: {name}")
+        if self.current_workflow_id is not None:
+            job = self._db_jobs.get(str(self.current_workflow_id))
+            if job is not None:
+                state_text, _color = self._job_state_display(job)
+                self.current_flow_label.setText(
+                    f"当前流程: {job.get('name') or '当前流程'} ({state_text})"
+                )
+                return
+        self.current_flow_label.setText("当前流程: -")
 
     def _create_workflow(self) -> None:
         if self.workflow_panel.is_running():
@@ -1908,6 +2138,18 @@ class Window(QWidget):
             return
         workflow_id = str(workflow.id)
         self.workflow_instances.append({"id": workflow_id, "workflow": workflow, "flow_path": flow_path})
+        try:
+            jobstore.create_job(
+                self._job_db_path(),
+                job_id=workflow_id,
+                created_at=str(workflow.ctime or ""),
+                name=str(workflow.name or ""),
+                job_type=str(workflow.meta.get("流程") or ""),
+                user=str(workflow.meta.get("用户") or ""),
+                meta=dict(workflow.meta or {}),
+            )
+        except Exception:
+            logger.exception("创建工单落库失败: Name=%s", workflow.name)
         self._set_current_workflow(workflow_id)
         self._load_workflow_list()
         self._set_fault("")
@@ -1918,15 +2160,32 @@ class Window(QWidget):
     def _delete_current_workflow(self) -> None:
         if self.workflow_panel.is_running() or self.current_workflow_id is None:
             return
-        delete_index = next((index for index, instance in enumerate(self.workflow_instances) if str(instance["id"]) == self.current_workflow_id), -1)
-        if delete_index < 0:
+        target_id = str(self.current_workflow_id)
+        entries = self._ordered_task_entries()
+        entry = next((item for item in entries if item["id"] == target_id), None)
+        if entry is None:
             return
-        deleted = self.workflow_instances[delete_index]
-        del self.workflow_instances[delete_index]
+        instance = entry["instance"]
+        job = entry["job"]
+        # 只允许删除从未开始过的工单; 已产生记录的作业保留在作业库中
+        if instance is not None and instance["workflow"].state != WorkflowState.IDLE:
+            return
+        if job is not None and (
+            job.get("started_at") or str(job.get("state") or "") != jobstore.STATE_IDLE
+        ):
+            return
+        try:
+            jobstore.delete_job(self._job_db_path(), target_id)
+        except Exception:
+            logger.exception("删除工单作业记录失败: id=%s", target_id)
+        self._db_jobs.pop(target_id, None)
+        if instance is not None:
+            self.workflow_instances.remove(instance)
+        remaining_ids = [item["id"] for item in entries if item["id"] != target_id]
         next_workflow_id: str | None = None
-        if self.workflow_instances:
-            next_index = min(delete_index, len(self.workflow_instances) - 1)
-            next_workflow_id = str(self.workflow_instances[next_index]["id"])
+        if remaining_ids:
+            deleted_index = [item["id"] for item in entries].index(target_id)
+            next_workflow_id = remaining_ids[min(deleted_index, len(remaining_ids) - 1)]
         self._set_current_workflow(next_workflow_id)
         self._load_workflow_list()
 
@@ -1944,11 +2203,10 @@ class Window(QWidget):
 
     def _on_workflow_running_changed(self, running: bool) -> None:
         self.create_flow_btn.setEnabled(not running)
-        self.delete_flow_btn.setEnabled(not running)
         self.workflow_list.setEnabled(not running)
-        self.start_flow_btn.setEnabled(not running)
         self.stop_flow_btn.setEnabled(running)
         self.select_cmd_btn.setEnabled(running)
+        self._refresh_workflow_actions()
         self._refresh_status_bar()
 
     def _on_workflow_state_changed(self, state: str, error_message: str) -> None:
@@ -1958,8 +2216,16 @@ class Window(QWidget):
             self._set_fault("流程已停止")
         else:
             self._set_fault("")
+        self._load_workflow_list()
 
     def _start_workflow(self) -> None:
+        instance = self._current_workflow_instance()
+        if instance is None:
+            return
+        # 已开始过的工单 (含已完成/停止/故障) 不允许从列表再次启动,
+        # 避免同一条作业记录被重复运行覆盖
+        if instance["workflow"].state != WorkflowState.IDLE:
+            return
         self.workflow_panel.start_workflow()
 
     def _stop_workflow(self) -> None:

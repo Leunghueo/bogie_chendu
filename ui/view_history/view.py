@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
-import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -25,132 +25,59 @@ from PySide6.QtWidgets import (
 )
 
 from _runtime import get_runtime
-from libs.logger import append_workflow_log_entries
+from libs import jobstore
 from libs.wf.base import utc_now
 
 logger = logging.getLogger(__name__)
 
-# 日志文件名格式:
-#   旧四段: YYYYMMDD-HHMMSS_type_name_id.log
-#   新三段: YYYYMMDD-HHMMSS_name_id.log
-#   最新两段: YYYYMMDD-HHMMSS_id.log  (id = uuid 前 8 位; name/type 从日志首行元信息补齐, 见 libs/logger.py)
-_LOG_FILENAME_RE = re.compile(
-    r"^(\d{8}-\d{6})_(.+?)_(.+?)_([a-f0-9]+)\.log$"
-)
-_LOG_FILENAME_RE_NEW = re.compile(
-    r"^(\d{8}-\d{6})_(.+)_([a-f0-9]+)\.log$"
-)
-_LOG_FILENAME_RE_V2 = re.compile(
-    r"^(\d{8}-\d{6})_([a-f0-9]+)\.log$"
-)
+# 作业记录自 bogie.db 的 TblFlowJob 表读取 (一行一次作业, 见 libs/jobstore.py):
+# summary / meta / air_curve 都是行上的独立字段, 不再扫描日志文件推导.
 
 _RESULT_KEYS = ["测量值", "最小值", "最大值", "单位", "结论"]
 _RESULT_HEADERS = ["项目", "测量值", "最小值", "最大值", "单位", "结论"]
 
 _LOG_LIST_HEADERS = ["日期", "类型", "名称", "ID", "上传EMIS"]
 
+def _summary_rows(job: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """把作业的 summary 字段展开为结果表格行.
 
-def _parse_log_filename(filename: str) -> dict[str, str] | None:
-    """从日志文件名解析日期、类型、名称和ID.
-
-    优先按旧四段式(日期_类型_名称_ID)解析; 不匹配时按新三段式(日期_名称_ID);
-    再不匹配按最新两段式(日期_ID). 后两种格式的 type/name 置空,
-    由调用方从日志首行元信息补齐.
-    """
-    match = _LOG_FILENAME_RE.match(filename)
-    if match:
-        date_raw, type_text, name_text, id_text = match.groups()
-    else:
-        match_new = _LOG_FILENAME_RE_NEW.match(filename)
-        if match_new:
-            date_raw, name_text, id_text = match_new.groups()
-            type_text = ""
-        else:
-            match_v2 = _LOG_FILENAME_RE_V2.match(filename)
-            if not match_v2:
-                return None
-            date_raw, id_text = match_v2.groups()
-            type_text = ""
-            name_text = ""
-    try:
-        date_obj = datetime.strptime(date_raw, "%Y%m%d-%H%M%S")
-        date_str = date_obj.strftime("%Y-%m-%d %H:%M:%S")
-    except ValueError:
-        date_str = date_raw
-    return {
-        "filename": filename,
-        "date_raw": date_raw,
-        "date": date_str,
-        "type": type_text,
-        "name": name_text,
-        "id": id_text,
-    }
-
-
-def _extract_summary_extra(path: Path) -> list[dict[str, Any]]:
-    """读取工作流日志, 返回所有 'event': 'summary' 行的 extra 数据列表.
-
-    每个 summary 的 extra 是一个 dict, 形如:
-    {"1位轮重": {"测量值": 300, "最小值": 250, ...}, ...}
-    本函数将其展开为列表, 方便表格展示.
-
+    summary 形如 {"1位轮重": {"测量值": 300, "最小值": 250, ...}, ...};
     "打印"为 False 的数据项不展示 (与导出报告、结果对话框保持一致).
     """
     results: list[dict[str, Any]] = []
-    if not path.exists():
+    summary = (job or {}).get("summary")
+    if not isinstance(summary, dict):
         return results
-    try:
-        with path.open("r", encoding="utf-8", errors="replace") as handle:
-            for line in handle:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    record = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if record.get("event") != "summary":
-                    continue
-                extra = record.get("extra")
-                if not isinstance(extra, dict):
-                    continue
-                # extra 的每个键是一个测量项, 值是该测量项的数据字典
-                for item_name, item_data in extra.items():
-                    if not isinstance(item_data, dict):
-                        continue
-                    # "打印"为 False 的数据项不展示 (未配置该字段时同样视为不打印)
-                    if not item_data.get("打印", False):
-                        continue
-                    row: dict[str, Any] = {"项目": item_name}
-                    for key in _RESULT_KEYS:
-                        row[key] = item_data.get(key, "-")
-                    results.append(row)
-                # 通常一个日志只有一个 summary, 但为了健壮性读取所有 summary
-    except Exception as exc:
-        logger.exception("failed to read workflow log: %s", path)
+    for item_name, item_data in summary.items():
+        if not isinstance(item_data, dict):
+            continue
+        if not item_data.get("打印", False):
+            continue
+        row: dict[str, Any] = {"项目": item_name}
+        for key in _RESULT_KEYS:
+            row[key] = item_data.get(key, "-")
+        results.append(row)
     return results
 
 
-def _extract_result_data(path: Path) -> dict[str, Any]:
-    """读取工作流日志, 返回最后一个 'summary' 行的完整 extra(结果数据字典)."""
-    result: dict[str, Any] = {}
-    if not path.exists():
-        return result
-    try:
-        with path.open("r", encoding="utf-8", errors="replace") as handle:
-            for line in handle:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    record = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if record.get("event") == "summary" and isinstance(record.get("extra"), dict):
-                    result = record["extra"]
-    except Exception:
-        logger.exception("failed to read workflow log: %s", path)
-    return result
+def _job_result_data(job: dict[str, Any] | None) -> dict[str, Any]:
+    """作业的完整结果数据 = summary 字段本身."""
+    summary = (job or {}).get("summary")
+    return summary if isinstance(summary, dict) else {}
+
+
+def _job_meta(job: dict[str, Any] | None) -> dict[str, Any]:
+    """作业的 meta 字段; 缺"工作流名称"时用作业名兜底注入 (表格列展示用)."""
+    meta = dict((job or {}).get("meta") or {})
+    if "工作流名称" not in meta and (job or {}).get("name"):
+        meta["工作流名称"] = str(job["name"])
+    return meta
+
+
+def _job_air_curves(job: dict[str, Any] | None) -> dict[str, Any]:
+    """作业的空簧气压曲线 = air_curve 字段; 无曲线时返回 {}."""
+    curves = (job or {}).get("air_curve")
+    return curves if isinstance(curves, dict) else {}
 
 
 def _decimal_digits(item: dict[str, Any], default: int = 2) -> int:
@@ -171,102 +98,6 @@ def _format_decimal(value: Any, digits: int) -> Any:
         return f"{float(value):.{digits}f}"
     except (TypeError, ValueError):
         return value
-
-
-def _extract_air_curves(path: Path) -> dict[str, Any]:
-    """读取工作流日志, 返回最后一个 'air_curve' 行的 extra(空簧气压曲线数组).
-
-    形如 {"空簧气压1": [v1, v2, ...], "空簧气压2": [...]};
-    旧日志无该事件时返回 {} (上传 EMIS 时 khbyLine1/2 为空字符串).
-    """
-    result: dict[str, Any] = {}
-    if not path.exists():
-        return result
-    try:
-        with path.open("r", encoding="utf-8", errors="replace") as handle:
-            for line in handle:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    record = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if record.get("event") == "air_curve" and isinstance(record.get("extra"), dict):
-                    result = record["extra"]
-    except Exception:
-        logger.exception("failed to read workflow log: %s", path)
-    return result
-
-
-def _extract_meta(path: Path) -> dict[str, Any]:
-    """读取工作流日志第一行(元信息), 返回其中的 meta 字典.
-
-    其后如存在 event == "meta_update" 的行(如结果确认时回写的互检员),
-    用其 meta 覆盖合并, 保证后续变更对导出PDF等可见.
-
-    若内层 meta 不含"工作流名称", 从首行顶层 record 兜底注入 (历史页表格列展示用).
-    """
-    if not path.exists():
-        return {}
-    try:
-        with path.open("r", encoding="utf-8", errors="replace") as handle:
-            first_line = handle.readline().strip()
-            record = json.loads(first_line)
-            if not isinstance(record, dict):
-                return {}
-            meta = dict(record.get("meta") or {})
-            if "工作流名称" not in meta and "工作流名称" in record:
-                meta["工作流名称"] = str(record["工作流名称"])
-            # 合并后续 meta_update 事件(按时间顺序, 后写的覆盖先写的)
-            for line in handle:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    entry = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if (
-                    isinstance(entry, dict)
-                    and entry.get("event") == "meta_update"
-                    and isinstance(entry.get("meta"), dict)
-                ):
-                    meta.update(entry["meta"])
-            return meta
-    except Exception:
-        logger.exception("failed to read workflow log meta: %s", path)
-    return {}
-
-
-def _has_emis_uploaded(path: Path) -> bool:
-    """读取工作流日志, 判断是否包含成功的 EMIS 上传记录.
-
-    匹配 _on_upload_emis 写入的一行: {"消息源": "emis", "event": "upload", ...}
-    失败状态(state != "完成")不计入.
-    """
-    if not path.exists():
-        return False
-    try:
-        with path.open("r", encoding="utf-8", errors="replace") as handle:
-            for line in handle:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    record = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if (
-                    isinstance(record, dict)
-                    and record.get("消息源") == "emis"
-                    and record.get("event") == "upload"
-                    and record.get("state") == "完成"
-                ):
-                    return True
-    except Exception:
-        logger.exception("failed to inspect emis upload state: %s", path)
-    return False
 
 
 def _default_printer() -> str:
@@ -350,14 +181,20 @@ class Window(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.runtime = get_runtime()
-        self._log_dir: Path = self._resolve_log_dir()
         self._all_logs: list[dict[str, str]] = []
+        self._jobs_by_id: dict[str, dict[str, Any]] = {}
         self._build_ui()
         self._refresh_logs()
 
-    def _resolve_log_dir(self) -> Path:
-        base_dir = Path(self.runtime.get("base_dir", "."))
-        return base_dir / "logs" / "flows"
+    def _job_db_path(self) -> Path:
+        return Path(self.runtime["paths"]["db"])
+
+    def _current_job(self) -> dict[str, Any] | None:
+        selected = self.log_table.selectedItems()
+        if not selected:
+            return None
+        job_id = self._job_id_at_row(selected[0].row())
+        return self._jobs_by_id.get(job_id)
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -480,25 +317,32 @@ class Window(QWidget):
         return panel
 
     def _refresh_logs(self) -> None:
-        """扫描日志目录, 加载所有日志文件信息."""
+        """从作业库加载全部有 summary 结果的作业记录."""
         self._all_logs.clear()
-        if self._log_dir.is_dir():
-            for path in sorted(self._log_dir.glob("*.log"), key=lambda p: p.name, reverse=True):
-                info = _parse_log_filename(path.name)
-                if info is not None:
-                    # 不包含完整 summary 记录的日志直接跳过
-                    if not _extract_result_data(path):
-                        continue
-                    # 新格式文件名缺少 type/name, 从日志首行元信息补齐
-                    if not info.get("type") or not info.get("name"):
-                        meta = _extract_meta(path)
-                        if not info.get("type"):
-                            info["type"] = str(meta.get("流程") or "")
-                        if not info.get("name"):
-                            info["name"] = str(meta.get("工作流名称") or "")
-                    info["path"] = str(path)
-                    info["emis_uploaded"] = _has_emis_uploaded(path)
-                    self._all_logs.append(info)
+        self._jobs_by_id = {}
+        try:
+            jobs = jobstore.list_jobs(self._job_db_path(), require_summary=True)
+        except Exception:
+            logger.exception("加载作业记录失败")
+            jobs = []
+        for job in jobs:
+            job_id = str(job.get("id") or "")
+            if not job_id:
+                continue
+            self._jobs_by_id[job_id] = job
+            meta = job.get("meta") or {}
+            created = str(job.get("created_at") or "")
+            self._all_logs.append(
+                {
+                    "job_id": job_id,
+                    "date": created,
+                    "date_raw": created.replace("-", "").replace(":", "").replace(" ", ""),
+                    "type": str(job.get("type") or meta.get("流程") or ""),
+                    "name": str(job.get("name") or ""),
+                    "id": job_id[:8],
+                    "emis_uploaded": bool(job.get("emis_uploaded")),
+                }
+            )
         self._on_search()
 
     def _on_search(self) -> None:
@@ -527,8 +371,8 @@ class Window(QWidget):
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 if col_index == 0:
-                    # 文件名不再单独展示, 存入首列的数据角色供后续取用
-                    item.setData(Qt.ItemDataRole.UserRole, log_info.get("filename", ""))
+                    # 作业 id 不单独展示, 存入首列的数据角色供后续取用
+                    item.setData(Qt.ItemDataRole.UserRole, log_info.get("job_id", ""))
                 if col_index == 4:
                     # 上传状态列居中显示, 已上传用绿色加粗
                     if log_info.get("emis_uploaded"):
@@ -541,27 +385,20 @@ class Window(QWidget):
         self.log_table.resizeColumnsToContents()
         self.result_table.setRowCount(0)
 
-    def _filename_at_row(self, row: int) -> str:
-        """从表格行中取出对应的日志文件名(存储在首列的 UserRole 中)."""
+    def _job_id_at_row(self, row: int) -> str:
+        """从表格行中取出对应的作业 id (存储在首列的 UserRole 中)."""
         item = self.log_table.item(row, 0)
         if item is None:
             return ""
         return str(item.data(Qt.ItemDataRole.UserRole) or "")
 
     def _on_log_selected(self) -> None:
-        """用户选中某行日志后, 加载并显示该日志的 summary 结果."""
-        selected = self.log_table.selectedItems()
-        if not selected:
+        """用户选中某行作业后, 显示该作业 summary 字段的结果."""
+        job = self._current_job()
+        if job is None:
             self.result_table.setRowCount(0)
             return
-
-        filename = self._filename_at_row(selected[0].row())
-        if not filename:
-            return
-
-        path = self._log_dir / filename
-        results = _extract_summary_extra(path)
-        self._render_result_table(results)
+        self._render_result_table(_summary_rows(job))
 
     def _render_result_table(self, results: list[dict[str, Any]]) -> None:
         self.result_table.setRowCount(0)
@@ -581,16 +418,15 @@ class Window(QWidget):
                 self.result_table.setItem(row_index, col_index, item)
         self.result_table.resizeColumnsToContents()
 
-    def _build_report_pdf(self, log_path: Path, filename: str) -> Path:
-        """将选中日志的 summary 数据填充 PDF 模板, 导出到 report.path 并返回 PDF 路径.
+    def _build_report_pdf(self, job: dict[str, Any]) -> Path:
+        """将选中作业的 summary 数据填充 PDF 模板, 导出到 report.path 并返回 PDF 路径.
 
         失败时抛出异常, 由调用方统一提示.
         """
-        # 从日志中提取结果数据与元信息
-        result_data = _extract_result_data(log_path)
+        result_data = _job_result_data(job)
         if not result_data:
-            raise ValueError("该日志中没有 summary 结果数据")
-        meta = _extract_meta(log_path)
+            raise ValueError("该作业中没有 summary 结果数据")
+        meta = _job_meta(job)
 
         # 填充 PDF 模板单元格
         maps: dict[str, Any] = {}
@@ -618,32 +454,34 @@ class Window(QWidget):
         maps["E4"] = meta.get("互检员", "")
         maps["H4"] = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-        # 导出到 app.ini 配置的 report.path 目录, 文件名与日志同名
+        # 导出到 app.ini 配置的 report.path 目录, 文件名: 日期_作业id前8位.pdf
         pdf_handler = self.runtime["pdf_report"]
         pdf_handler.load_template()
         pdf_handler.set_cells(maps)
-        output_name = Path(filename).stem + ".pdf"
+        created = str(job.get("created_at") or "")
+        try:
+            date_part = datetime.strptime(created, "%Y-%m-%d %H:%M:%S").strftime("%Y%m%d-%H%M%S")
+        except ValueError:
+            date_part = "unknown-time"
+        output_name = f"{date_part}_{str(job.get('id') or '')[:8]}.pdf"
         return Path(pdf_handler.export_pdf(output_name))
 
     def _on_export(self) -> None:
-        """导出报告: 将选中日志的 summary 数据填充 PDF 模板, 导出到 report.path"""
+        """导出报告: 将选中作业的 summary 数据填充 PDF 模板, 导出到 report.path"""
         from PySide6.QtWidgets import QMessageBox
 
-        # 获取当前选中的日志
         selected = self.log_table.selectedItems()
         if not selected:
-            QMessageBox.warning(self, "提示", "请先在搜索结果列表中选择一条日志")
+            QMessageBox.warning(self, "提示", "请先在搜索结果列表中选择一条作业记录")
             return
-        row = selected[0].row()
-        filename = self._filename_at_row(row)
-        if not filename:
+        job = self._current_job()
+        if job is None:
             return
-        log_path = self._log_dir / filename
 
         try:
-            output_path = self._build_report_pdf(log_path, filename)
+            output_path = self._build_report_pdf(job)
         except Exception as exc:
-            logger.exception("failed to export pdf report: %s", filename)
+            logger.exception("failed to export pdf report: %s", job.get("id"))
             QMessageBox.critical(self, "导出失败", f"导出报告失败:\n{exc}")
             return
         QMessageBox.information(self, "导出成功", f"报告已导出到:\n{output_path}")
@@ -651,24 +489,23 @@ class Window(QWidget):
         _open_folder(Path(output_path).parent)
 
     def _on_print(self) -> None:
-        """打印: 生成当前所选日志的报告 PDF, 并用默认打印机直接打印."""
+        """打印: 生成当前所选作业的报告 PDF, 并用默认打印机直接打印."""
         from PySide6.QtWidgets import QMessageBox
 
         selected = self.log_table.selectedItems()
         if not selected:
-            QMessageBox.warning(self, "提示", "请先在搜索结果列表中选择一条日志")
+            QMessageBox.warning(self, "提示", "请先在搜索结果列表中选择一条作业记录")
             return
-        filename = self._filename_at_row(selected[0].row())
-        if not filename:
+        job = self._current_job()
+        if job is None:
             return
-        log_path = self._log_dir / filename
 
         try:
-            output_path = self._build_report_pdf(log_path, filename)
+            output_path = self._build_report_pdf(job)
             printer = _default_printer()
             _print_pdf(output_path)
         except Exception as exc:
-            logger.exception("failed to print pdf report: %s", filename)
+            logger.exception("failed to print pdf report: %s", job.get("id"))
             QMessageBox.critical(self, "打印失败", f"打印报告失败:\n{exc}")
             return
         logger.info("报告已发送到默认打印机: %s", output_path)
@@ -678,10 +515,10 @@ class Window(QWidget):
         )
 
     def _on_amend_data(self) -> None:
-        """补录数据: 打开所选日志的结果对话框, 允许用户修改后回写日志.
+        """补录数据: 打开所选作业的结果对话框, 允许用户修改后回写作业库.
 
-        回写方式为在日志末尾追加一条新的 summary 事件(读取时以最后一条为准),
-        原有记录保留不动, 便于追溯; 互检员变更以 meta_update 事件追加。
+        回写方式为整块更新该作业行的 summary 与 meta 字段 (单事务),
+        同时把补录条目并入 logs 数组留痕; 现行值只认字段, 不靠追加推导。
         """
         from PySide6.QtWidgets import QDialog, QMessageBox
 
@@ -689,21 +526,17 @@ class Window(QWidget):
 
         selected = self.log_table.selectedItems()
         if not selected:
-            QMessageBox.warning(self, "提示", "请先在搜索结果列表中选择一条日志")
+            QMessageBox.warning(self, "提示", "请先在搜索结果列表中选择一条作业记录")
             return
-        filename = self._filename_at_row(selected[0].row())
-        if not filename:
-            return
-        log_path = self._log_dir / filename
-        if not log_path.exists():
-            QMessageBox.warning(self, "提示", f"日志文件不存在:\n{log_path}")
+        job = self._current_job()
+        if job is None:
             return
 
-        result_data = _extract_result_data(log_path)
+        result_data = copy.deepcopy(_job_result_data(job))
         if not result_data:
-            QMessageBox.warning(self, "提示", "该日志中没有 summary 结果数据, 无法补录")
+            QMessageBox.warning(self, "提示", "该作业中没有 summary 结果数据, 无法补录")
             return
-        meta = _extract_meta(log_path)
+        meta = _job_meta(job)
 
         # 与历史列表/导出报告保持一致: 只展示"打印"为真的数据项,
         # 未展示的数据项在回写时原样保留(写回的是完整的 result_data)
@@ -713,12 +546,12 @@ class Window(QWidget):
             if isinstance(item, dict) and item.get("打印", False)
         ]
         if not items:
-            # 老日志可能缺少"打印"标记, 兜底为全部数据项, 避免无法补录
+            # 老数据可能缺少"打印"标记, 兜底为全部数据项, 避免无法补录
             items = [
                 (name, item) for name, item in result_data.items() if isinstance(item, dict)
             ]
         if not items:
-            QMessageBox.warning(self, "提示", "该日志中没有可编辑的结果数据")
+            QMessageBox.warning(self, "提示", "该作业中没有可编辑的结果数据")
             return
 
         dialog = ResultDialog(
@@ -732,10 +565,14 @@ class Window(QWidget):
             return
 
         meta["互检员"] = dialog.checker
+        job_id = str(job.get("id") or "")
         try:
-            append_workflow_log_entries(
-                log_path,
-                [
+            ok = jobstore.amend_job(
+                self._job_db_path(),
+                job_id,
+                summary=result_data,
+                meta=meta,
+                entries=[
                     {
                         "消息源": "补录",
                         "event": "summary",
@@ -752,59 +589,48 @@ class Window(QWidget):
                     },
                 ],
             )
+            if not ok:
+                raise RuntimeError("作业记录不存在")
         except Exception:
-            logger.exception("补录数据写入工作流日志失败: %s", filename)
-            QMessageBox.critical(self, "补录失败", "补录数据写入日志失败, 详情见当天日志")
+            logger.exception("补录数据写入作业库失败: %s", job_id)
+            QMessageBox.critical(self, "补录失败", "补录数据写入作业库失败, 详情见当天日志")
             return
 
         # 刷新列表, 并重新展示补录后的结果
         self._refresh_logs()
-        self._render_result_table(_extract_summary_extra(log_path))
-        logger.info("补录数据成功: %s", filename)
-        QMessageBox.information(self, "补录成功", "数据已补录并写入日志")
+        refreshed = self._jobs_by_id.get(job_id)
+        self._render_result_table(_summary_rows(refreshed))
+        logger.info("补录数据成功: %s", job_id)
+        QMessageBox.information(self, "补录成功", "数据已补录并保存")
 
     def _on_upload_emis(self) -> None:
-        """上传当前选中日志的 summary 数据到 EMIS.
+        """上传当前选中作业的 summary 数据到 EMIS.
 
-        数据完全来自日志, 不依赖运行中的 workflow.
-        试验时间: 起始取自日志文件名时间戳, 结束取自日志文件 mtime.
+        数据完全来自作业库行, 不依赖运行中的 workflow.
+        试验时间: 起始取作业创建时间, 结束取作业完成时间.
         """
         from PySide6.QtWidgets import QMessageBox
         from libs.push.all import PushConfigError, emis
 
         selected = self.log_table.selectedItems()
         if not selected:
-            QMessageBox.warning(self, "提示", "请先在搜索结果列表中选择一条日志")
+            QMessageBox.warning(self, "提示", "请先在搜索结果列表中选择一条作业记录")
             return
-        filename = self._filename_at_row(selected[0].row())
-        if not filename:
+        job = self._current_job()
+        if job is None:
             return
-        log_path = self._log_dir / filename
-        if not log_path.exists():
-            QMessageBox.warning(self, "提示", f"日志文件不存在:\n{log_path}")
-            return
+        job_id = str(job.get("id") or "")
 
-        result_data = _extract_result_data(log_path)
+        result_data = _job_result_data(job)
         if not result_data:
-            QMessageBox.warning(self, "提示", "该日志中没有 summary 结果数据, 无法上传")
+            QMessageBox.warning(self, "提示", "该作业中没有 summary 结果数据, 无法上传")
             return
-        meta = _extract_meta(log_path)
-        # 空簧保压曲线 (旧日志无 air_curve 事件时为 {}, 上传时 khbyLine1/2 为空)
-        air_curves = _extract_air_curves(log_path)
+        meta = _job_meta(job)
+        # 空簧保压曲线 (无 air_curve 时为 {}, 上传时 khbyLine1/2 为空)
+        air_curves = _job_air_curves(job)
 
-        # 试验时间: 起始来自文件名时间戳, 结束来自文件 mtime
-        info = _parse_log_filename(filename) or {}
-        try:
-            check_start = datetime.strptime(
-                info.get("date_raw", ""), "%Y%m%d-%H%M%S"
-            ).strftime("%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            check_start = datetime.fromtimestamp(
-                log_path.stat().st_mtime
-            ).strftime("%Y-%m-%d %H:%M:%S")
-        check_end = datetime.fromtimestamp(
-            log_path.stat().st_mtime
-        ).strftime("%Y-%m-%d %H:%M:%S")
+        check_start = str(job.get("created_at") or "") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        check_end = str(job.get("finished_at") or "") or check_start
 
         try:
             emis(
@@ -814,35 +640,34 @@ class Window(QWidget):
                 check_end=check_end,
                 air_curves=air_curves or None,
             )
-            # 在 workflow 日志中追加一条成功记录, 供历史列表显示上传状态
+            # 在作业行上置 EMIS 已上传标志, 并把上传条目并入 logs 留痕
             try:
-                append_workflow_log_entries(
-                    log_path,
-                    [
-                        {
-                            "消息源": "emis",
-                            "event": "upload",
-                            "timestamp": utc_now(),
-                            "state": "完成",
-                        }
-                    ],
+                jobstore.mark_emis_uploaded(
+                    self._job_db_path(),
+                    job_id,
+                    entry={
+                        "消息源": "emis",
+                        "event": "upload",
+                        "timestamp": utc_now(),
+                        "state": "完成",
+                    },
                 )
             except Exception:
-                logger.exception("写入 EMIS 上传记录到工作流日志失败: %s", filename)
+                logger.exception("写入 EMIS 上传记录到作业库失败: %s", job_id)
             # 刷新列表, 让当前行的"上传EMIS"列即时显示为"已上传"
             self._refresh_logs()
-            logger.info("上传 EMIS 成功: %s", filename)
+            logger.info("上传 EMIS 成功: %s", job_id)
             QMessageBox.information(self, "上传成功", "数据成功上传EMIS")
         except PushConfigError as exc:
             # 配置问题(文件缺失/JSON 非法), 与网络上报失败区分开
-            logger.exception("上传 EMIS 失败(推送配置错误), 日志文件: %s", filename)
+            logger.exception("上传 EMIS 失败(推送配置错误), 作业: %s", job_id)
             QMessageBox.critical(
                 self,
                 "推送配置错误",
                 f"{exc}\n\n该错误已记录到当天日志",
             )
         except RuntimeError as exc:
-            logger.exception("上传 EMIS 失败, 日志文件: %s", filename)
+            logger.exception("上传 EMIS 失败, 作业: %s", job_id)
             message = str(exc)
             # S_REFUSED 属于"调用成功但数据不被接受", 用警示而非错误样式
             if "S_REFUSED" in message:
