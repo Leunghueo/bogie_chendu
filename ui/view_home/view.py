@@ -1737,17 +1737,13 @@ class Window(QWidget):
         layout.addLayout(action_row)
         layout.addWidget(QLabel("当前工单", panel))
         self.workflow_list = QTableWidget(0, 4, panel)
-        self.workflow_list.setHorizontalHeaderLabels(["工作流名称", "创建者", "时间", "状态"])
+        self.workflow_list.setHorizontalHeaderLabels(["状态", "试验单号", "时间", "操作员"])
         self.workflow_list.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.workflow_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.workflow_list.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.workflow_list.verticalHeader().setVisible(False)
         header = self.workflow_list.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-        self.workflow_list.setColumnWidth(0, 160)
-        self.workflow_list.setColumnWidth(1, 70)
-        self.workflow_list.setColumnWidth(2, 120)
-        self.workflow_list.setColumnWidth(3, 110)
+        header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.workflow_list.currentItemChanged.connect(self._switch_workflow)
         self.workflow_list.itemDoubleClicked.connect(self._on_workflow_double_clicked)
         layout.addWidget(self.workflow_list, 1)
@@ -2231,13 +2227,14 @@ class Window(QWidget):
             creator_item = QTableWidgetItem(creator)
             created_item = QTableWidgetItem(created)
             state_item = QTableWidgetItem(state_text)
+            state_item.setData(Qt.UserRole, entry["id"])
             brush = QBrush(color)
             for cell in (item, creator_item, created_item, state_item):
                 cell.setBackground(brush)
-            self.workflow_list.setItem(row_index, 0, item)
-            self.workflow_list.setItem(row_index, 1, creator_item)
+            self.workflow_list.setItem(row_index, 0, state_item)
+            self.workflow_list.setItem(row_index, 1, item)
             self.workflow_list.setItem(row_index, 2, created_item)
-            self.workflow_list.setItem(row_index, 3, state_item)
+            self.workflow_list.setItem(row_index, 3, creator_item)
             if entry["id"] == self.current_workflow_id:
                 selected_row = row_index
         if selected_row >= 0:
@@ -2266,6 +2263,31 @@ class Window(QWidget):
         if job_id:
             self._show_job_result(job_id)
 
+    def _job_result_template(self, job: dict) -> dict:
+        """作业尚无 summary 时的结果数据兜底.
+
+        先用作业 data 列里的结果数据 (创建工单时已按 bogies.json 定型落库;
+        中途停止的作业则是运行中已测到的数据), 没有再按 meta 的车型/位号
+        查 bogies 目录模板并把测量值置空 (兼容定型落库之前创建的老工单).
+        """
+        data = job.get("data")
+        if isinstance(data, dict):
+            stored = data.get("结果数据")
+            if isinstance(stored, dict) and stored:
+                return copy.deepcopy(stored)
+        meta = job.get("meta") or {}
+        record = (self._bogie_catalog.get(str(meta.get("车型") or "")) or {}).get(
+            str(meta.get("位号") or "")
+        )
+        template = record.get("结果数据") if isinstance(record, dict) else None
+        if not isinstance(template, dict):
+            return {}
+        result = copy.deepcopy(template)
+        for item in result.values():
+            if isinstance(item, dict):
+                item["测量值"] = ""
+        return result
+
     def _show_job_result(self, job_id: str) -> None:
         """弹出 dialog_result 显示该任务当前的结果数据 (作业库 summary 字段).
 
@@ -2285,6 +2307,8 @@ class Window(QWidget):
             return
         summary = job.get("summary")
         result_data = copy.deepcopy(summary) if isinstance(summary, dict) else {}
+        if not result_data:
+            result_data = self._job_result_template(job)
         items = [
             (name, item)
             for name, item in result_data.items()
@@ -2370,6 +2394,15 @@ class Window(QWidget):
             return
         workflow_id = str(workflow.id)
         self.workflow_instances.append({"id": workflow_id, "workflow": workflow, "flow_path": flow_path})
+        # 结果数据一创建就定型: 把 bogies.json 对应车型的结果数据模板随工单落库
+        # (测量值置空, 其余标准/范围/单位/打印标记照模板), 未开始的工单打开
+        # 结果页也能看到完整数据项; 只存副本, 不动 workflow 自己的运行数据.
+        seed_data = copy.deepcopy(workflow.data or {})
+        seed_template = seed_data.get("结果数据")
+        if isinstance(seed_template, dict):
+            for seed_item in seed_template.values():
+                if isinstance(seed_item, dict):
+                    seed_item["测量值"] = ""
         try:
             jobstore.create_job(
                 self._job_db_path(),
@@ -2379,6 +2412,7 @@ class Window(QWidget):
                 job_type=str(workflow.meta.get("流程") or ""),
                 user=str(workflow.meta.get("用户") or ""),
                 meta=dict(workflow.meta or {}),
+                data=seed_data,
             )
         except Exception:
             logger.exception("创建工单落库失败: Name=%s", workflow.name)

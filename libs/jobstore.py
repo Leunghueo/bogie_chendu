@@ -124,16 +124,19 @@ def create_job(
     job_type: str,
     user: str,
     meta: dict[str, Any] | None,
+    data: dict[str, Any] | None = None,
 ) -> None:
     """创建工单时建行: state=待执行, started_at/finished_at 为空.
 
+    data 为工单的初始数据快照 (含按 bogies.json 定型的结果数据模板),
+    创建即落库, 保证未开始的工单也能查到完整的结果数据结构.
     已存在同 id 的行时不覆盖 (INSERT OR IGNORE), 保证重建/重复调用安全.
     """
     ensure_schema(db_path)
     with _connect(db_path) as conn:
         conn.execute(
             f"INSERT OR IGNORE INTO {TABLE} "
-            "(id, created_at, name, type, user, state, meta, logs) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "(id, created_at, name, type, user, state, meta, data, logs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 job_id,
                 normalize_time(created_at) or local_now(),
@@ -142,6 +145,7 @@ def create_job(
                 user,
                 STATE_IDLE,
                 _dumps(meta or {}),
+                _dumps(data or {}),
                 _dumps([]),
             ),
         )
