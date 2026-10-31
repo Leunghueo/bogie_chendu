@@ -442,12 +442,39 @@ async def run_select(node: Node, workflow: "Workflow") -> str:
     return selected
 
 
+def _evaluate_cond_expression(raw: str, workflow: "Workflow", resolved: str) -> bool:
+    """cond 表达式求值: 在 done 文法之上扩展左值来源 (cond 专用, 不影响 done_list).
+
+    左值先查试验参数: 命中 (如 cal_head 产出的 TEMP@压头DX1 等中间量) 就直接
+    用参数值与右值比较, 右值同样可引用试验参数; 未命中再把左值当 plc/vsp
+    点名走 _evaluate_done_expression 的原有求值. 比较语义 (= 的数值/布尔
+    处理、> < 仅限数值) 与点位路径完全一致.
+    """
+    mid_data = _get_workflow_mid_data(workflow)
+    if mid_data:
+        for operator in ("=", ">", "<"):
+            if operator not in raw:
+                continue
+            left, right = raw.split(operator, 1)
+            left = left.strip()
+            if left in mid_data:
+                rhs = right.strip()
+                if rhs in mid_data:
+                    rhs = str(mid_data[rhs])
+                target = _coerce_done_target(rhs)
+                return _done_condition_matched(mid_data[left], operator, target)
+            break
+    return _evaluate_done_expression(resolved)
+
+
 @register_node_actor("cond")
 async def run_cond(node: Node, workflow: "Workflow") -> str:
     """条件分支: args.expr 为真走 next[0], 为假走 next[1].
 
-    expr 与 plc_batch 的 done_list 同一文法: 单个比较式 (点 = / > / < 值,
-    右值可引用试验参数), 也可给一个列表表示 AND (全部为真才为真).
+    expr 与 plc_batch 的 done_list 同一文法: 单个比较式 (左值 = / > / < 右值),
+    右值可引用试验参数, 也可给一个列表表示 AND (全部为真才为真).
+    与 done_list 的区别只在左值: cond 的左值除 plc/vsp 点名外, 还可以是
+    试验参数的键 (中间量), 先查参数、未命中再查点位.
     与 select 不同, cond 不走 owner-select 回溯: 两条支路必须各自显式
     指向汇合节点 (或 end), 因此可以有多个 cond、也可以嵌套.
     表达式缺失/非法直接报错, 不静默选支路.
@@ -474,7 +501,7 @@ async def run_cond(node: Node, workflow: "Workflow") -> str:
         if resolved is None:
             raise WorkflowError(f"cond node {node.node_id} has empty expr: {raw!r}")
         evaluated.append(resolved)
-        if not await asyncio.to_thread(_evaluate_done_expression, resolved):
+        if not await asyncio.to_thread(_evaluate_cond_expression, raw, workflow, resolved):
             result = False
             break
     node.result = {"expr": evaluated, "result": result}
