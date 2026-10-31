@@ -827,6 +827,129 @@ class SelectBranchDialog(QDialog):
         except Exception:
             pass
 
+class CreateJobConfirmDialog(QDialog):
+    """创建工单前的防呆确认弹窗.
+
+    展示工单的 车型 / 位号 / 车号 / 编号 / 流程, 必须由用户显式点击 "确认创建"
+    才会返回 Accepted; 回车键被吞掉 (避免表单里敲回车误创建), 关闭/Esc 视为取消.
+    """
+
+    # (meta 键, 显示标题)
+    _FIELDS: tuple[tuple[str, str], ...] = (
+        ("车型", "车型"),
+        ("位号", "位号"),
+        ("车号", "车号"),
+        ("编号", "编号"),
+        ("流程", "流程"),
+    )
+
+    def __init__(self, meta: dict[str, object], parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("创建工单确认")
+        self.setModal(True)
+        self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
+        self.setMinimumWidth(430)
+        self._build_ui(meta)
+
+    def _build_ui(self, meta: dict[str, object]) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(20, 18, 20, 16)
+        root.setSpacing(14)
+
+        prompt = QLabel("请核对以下工单信息，确认无误后再创建：", self)
+        prompt.setObjectName("createJobPrompt")
+        prompt.setWordWrap(True)
+        root.addWidget(prompt)
+
+        card = QFrame(self)
+        card.setObjectName("createJobCard")
+        form = QFormLayout(card)
+        form.setContentsMargins(14, 12, 14, 12)
+        form.setHorizontalSpacing(16)
+        form.setVerticalSpacing(10)
+        form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        for meta_key, title in self._FIELDS:
+            value = str(meta.get(meta_key) or "").strip()
+            value_label = QLabel(value or "-", card)
+            value_label.setObjectName(
+                "createJobValue" if value else "createJobValueEmpty"
+            )
+            form.addRow(f"{title}:", value_label)
+        root.addWidget(card)
+
+        tip = QLabel("信息有误请点击“取消”，返回修改后再创建。", self)
+        tip.setObjectName("createJobTip")
+        tip.setWordWrap(True)
+        root.addWidget(tip)
+
+        button_row = QHBoxLayout()
+        button_row.setSpacing(12)
+        button_row.addStretch(1)
+
+        cancel_btn = QPushButton("取消", self)
+        cancel_btn.setObjectName("createJobBtnCancel")
+        cancel_btn.setMinimumHeight(42)
+        cancel_btn.setCursor(Qt.PointingHandCursor)
+        cancel_btn.setDefault(False)
+        cancel_btn.setAutoDefault(False)
+        cancel_btn.clicked.connect(self.reject)
+
+        confirm_btn = QPushButton("确认创建", self)
+        confirm_btn.setObjectName("createJobBtnPrimary")
+        confirm_btn.setMinimumHeight(42)
+        confirm_btn.setCursor(Qt.PointingHandCursor)
+        # 不做默认按钮: 回车不能直接创建工单, 必须鼠标点击
+        confirm_btn.setDefault(False)
+        confirm_btn.setAutoDefault(False)
+        confirm_btn.clicked.connect(self.accept)
+
+        button_row.addWidget(cancel_btn)
+        button_row.addWidget(confirm_btn)
+        root.addLayout(button_row)
+
+        # 吞掉回车: 防止在输入框/按钮上敲回车被误当成确认创建
+        self._enter_blocker = _EnterKeyBlocker(self)
+        self.installEventFilter(self._enter_blocker)
+        for child in self.findChildren(QWidget):
+            child.installEventFilter(self._enter_blocker)
+
+        cancel_btn.setFocus()
+
+        self.setStyleSheet(
+            "QDialog { background-color: #f8fafc; }"
+            "QLabel#createJobPrompt {"
+            " font-size: 16px; font-weight: 600; color: #1e293b; background: none;"
+            "}"
+            "QFrame#createJobCard {"
+            " background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px;"
+            "}"
+            "QFrame#createJobCard QLabel {"
+            " background: none; font-size: 16px; color: #475569;"
+            "}"
+            "QLabel#createJobValue {"
+            " font-size: 18px; font-weight: 700; color: #0f172a;"
+            "}"
+            "QLabel#createJobValueEmpty {"
+            " font-size: 18px; font-weight: 700; color: #dc2626;"
+            "}"
+            "QLabel#createJobTip {"
+            " font-size: 13px; color: #b45309; background: #fef3c7;"
+            " border: 1px solid #f59e0b; border-radius: 6px; padding: 6px 10px;"
+            "}"
+            "QPushButton { font-size: 15px; font-weight: 600; border-radius: 6px; }"
+            "QPushButton#createJobBtnCancel {"
+            " background: #e2e8f0; color: #334155; border: 1px solid #94a3b8;"
+            " padding: 0 22px;"
+            "}"
+            "QPushButton#createJobBtnCancel:hover { background: #cbd5e1; }"
+            "QPushButton#createJobBtnPrimary {"
+            " background: #2563eb; color: #ffffff; border: 1px solid #1d4ed8;"
+            " padding: 0 22px;"
+            "}"
+            "QPushButton#createJobBtnPrimary:hover { background: #1d4ed8; }"
+        )
+
+
 class WorkflowRuntimePanel(QWidget):
     state_changed = Signal(str, str)
     running_changed = Signal(bool)
@@ -2200,6 +2323,13 @@ class Window(QWidget):
         except Exception as exc:
             logger.exception("create workflow failed")
             QMessageBox.warning(self, "创建流程失败", str(exc))
+            return
+        # 防呆: 先弹出工单信息确认框, 用户确认后再真正创建
+        dialog = CreateJobConfirmDialog(workflow.meta, self)
+        accepted = dialog.exec() == QDialog.DialogCode.Accepted
+        dialog.deleteLater()
+        if not accepted:
+            logger.info(f"取消创建流程: Name={workflow.name}")
             return
         workflow_id = str(workflow.id)
         self.workflow_instances.append({"id": workflow_id, "workflow": workflow, "flow_path": flow_path})

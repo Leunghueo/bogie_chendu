@@ -5,22 +5,28 @@ if "%~1"=="" (
     goto :end
 )
 
-if "%~1"=="sim" (
-    echo ========== Start sim ===========
-    @REM start "" gos\plc_reader\plcsrv.exe --config configs/hardware/plc.json
-    go run gos\vsp_sim\main.go
-)
-
 if "%~1"=="ui" (
     echo ========== UI ===========
-    for /d %%i in (src\ui\*) do (
+    pushd "%~dp0"
+    where pyside6-uic >nul 2>nul
+    if errorlevel 1 (
+        echo [ERROR] pyside6-uic not found in PATH, run: micromamba activate qtt
+        popd
+        goto :end
+    )
+    for /d %%i in (ui\*) do (
         set folder_name=%%~nxi
         if exist "%%i\_view.ui" (
-            del /f /q "%%i\_view.py"
-            pyside6-uic "%%i\_view.ui" -o "%%i\_view.py"
-            echo Generated: %%i\_view.py
+            pyside6-uic "%%i\_view.ui" -o "%%i\_view.py.tmp"
+            if exist "%%i\_view.py.tmp" (
+                move /y "%%i\_view.py.tmp" "%%i\_view.py" >nul
+                echo Generated: %%i\_view.py
+            ) else (
+                echo [ERROR] uic failed, keep old file: %%i\_view.py
+            )
         )
     )
+    popd
 )
 
 if "%~1"=="dev" (

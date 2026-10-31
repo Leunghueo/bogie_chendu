@@ -1433,6 +1433,35 @@ QPushButton {
           <string>显示计算结果</string>
          </property>
         </widget>
+        <widget class="QLabel" name="tag_5">
+         <property name="geometry">
+          <rect>
+           <x>1036</x>
+           <y>620</y>
+           <width>41</width>
+           <height>31</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <family>Adobe Fan Heiti Std</family>
+           <pointsize>20</pointsize>
+           <italic>false</italic>
+           <fontweight>Thin</fontweight>
+          </font>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QLabel{
+    background: rgb(255, 85, 0);
+    border: none;
+	color: rgb(0, 0, 0);
+	font: 100 20pt &quot;Adobe Fan Heiti Std&quot;;
+}</string>
+         </property>
+         <property name="text">
+          <string>锁</string>
+         </property>
+        </widget>
        </widget>
       </item>
      </layout>

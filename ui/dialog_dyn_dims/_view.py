@@ -444,6 +444,21 @@ class Ui_Form(object):
         self.rd_cal.setObjectName(u"rd_cal")
         self.rd_cal.setGeometry(QRect(250, 80, 121, 20))
         self.rd_cal.setFont(font2)
+        self.tag_5 = QLabel(self.widget_2)
+        self.tag_5.setObjectName(u"tag_5")
+        self.tag_5.setGeometry(QRect(1036, 620, 41, 31))
+        font3 = QFont()
+        font3.setFamilies([u"Adobe Fan Heiti Std"])
+        font3.setPointSize(20)
+        font3.setWeight(QFont.Thin)
+        font3.setItalic(False)
+        self.tag_5.setFont(font3)
+        self.tag_5.setStyleSheet(u"QLabel{\n"
+"    background: rgb(255, 85, 0);\n"
+"    border: none;\n"
+"	color: rgb(0, 0, 0);\n"
+"	font: 100 20pt \"Adobe Fan Heiti Std\";\n"
+"}")
 
         self.horizontalLayout.addWidget(self.widget_2)
 
@@ -663,5 +678,6 @@ class Ui_Form(object):
         self.btn_zero_l34_4.setText(QCoreApplication.translate("Form", u"2\u53f7\u5185\u6d4b\u8ddd\u6821\u51c6", None))
         self.rd_sensor.setText(QCoreApplication.translate("Form", u"\u663e\u793a\u4f20\u611f\u5668", None))
         self.rd_cal.setText(QCoreApplication.translate("Form", u"\u663e\u793a\u8ba1\u7b97\u7ed3\u679c", None))
+        self.tag_5.setText(QCoreApplication.translate("Form", u"\u9501", None))
     # retranslateUi
 
