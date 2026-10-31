@@ -2091,28 +2091,64 @@ class Window(QWidget):
         return True
 
     def _refresh_workflow_actions(self) -> None:
-        """按当前选中任务刷新开始/删除按钮: 只有未开始的工单可开始,
-        只有从未开始过的工单可删除 (已产生记录的作业保留在库中)."""
+        """按当前选中任务刷新开始/删除按钮: 未开始/已停止的工单可开始;
+        删除不限状态, 任何已选中的任务都可删 (删除前有确认弹窗)."""
         if not hasattr(self, "start_flow_btn"):
             return
         running = self.workflow_panel.is_running()
         instance = self._current_workflow_instance()
         startable = False
-        deletable = False
         if instance is not None:
             state = instance["workflow"].state
-            job = self._db_jobs.get(str(instance["id"]))
             startable = state in (WorkflowState.IDLE, WorkflowState.STOPPED)
-            deletable = state == WorkflowState.IDLE and not (job and job.get("started_at"))
-        elif self.current_workflow_id is not None:
-            job = self._db_jobs.get(str(self.current_workflow_id))
-            if job is not None:
-                deletable = (
-                    str(job.get("state") or "") == jobstore.STATE_IDLE
-                    and not job.get("started_at")
-                )
+        deletable = self.current_workflow_id is not None
         self.start_flow_btn.setEnabled(startable and not running)
         self.delete_flow_btn.setEnabled(deletable and not running)
+
+    def _sync_flow_graph(self, workflow) -> None:
+        """选中任务变化时同步右侧流程示意图: 有 workflow 对象就画它,
+        没有就重建空图, 避免图上残留上一个任务的内容."""
+        if not hasattr(self, "_flow_graph") or self._flow_graph is None:
+            return
+        self._flow_graph._build_ui()
+        if workflow is not None:
+            self._flow_graph.update(workflow)
+
+    def _build_display_workflow(self, job):
+        """为只读作业 (已完成/故障) 按模板+meta 重建一个仅供右侧展示的 workflow.
+
+        不注册为工单实例、不可启动; 节点状态从作业 logs 逐条恢复 (同节点取最后
+        一条记录的状态). 模板缺失等原因重建失败时返回 None, 调用方回退为清空展示.
+        """
+        try:
+            built = self._build_workflow_from_template(
+                meta_override=dict(job.get("meta") or {}),
+                job_id=str(job["id"]),
+                job_ctime=str(job.get("created_at") or ""),
+            )
+            if not built:
+                return None
+            workflow, _flow_path = built
+        except Exception:
+            logger.exception("display rebuild workflow failed: id=%s", job.get("id"))
+            return None
+        states: dict[str, str] = {}
+        for entry in job.get("logs") or []:
+            if not isinstance(entry, dict):
+                continue
+            label = str(entry.get("节点") or "")
+            state = str(entry.get("状态") or "")
+            if "(" in label and label.endswith(")") and state:
+                states[label[label.rfind("(") + 1:-1]] = state
+        for node_id, state_text in states.items():
+            node = workflow.nodes.get(node_id)
+            if node is None:
+                continue
+            try:
+                node.state = WorkflowState(state_text)
+            except ValueError:
+                continue
+        return workflow
 
     def _set_current_workflow(self, workflow_id: str | None) -> None:
         instance = self._find_workflow_instance(workflow_id)
@@ -2137,6 +2173,7 @@ class Window(QWidget):
                 self.workflow_panel.set_workflow_instance(None)
                 self._refresh_current_flow_label()
                 self.workflow_panel._prefill_node_table([])
+                self._sync_flow_graph(None)
                 self._refresh_workflow_actions()
                 return
             # 已完成/故障的作业: 只读记录, 不重建、不允许再次启动
@@ -2145,7 +2182,11 @@ class Window(QWidget):
             self.workflow_panel.set_workflow_instance(None)
             self._apply_workflow_meta(job.get("meta") or {})
             self._refresh_current_flow_label()
-            self.workflow_panel._prefill_node_table([])
+            display_workflow = self._build_display_workflow(job)
+            self.workflow_panel._prefill_node_table(
+                display_workflow.get_node_list() if display_workflow is not None else []
+            )
+            self._sync_flow_graph(display_workflow)
             self._refresh_workflow_actions()
             logger.info(f"查看作业记录: Name={job.get('name')}")
             return
@@ -2156,6 +2197,7 @@ class Window(QWidget):
         self._apply_workflow_meta(workflow.meta)
         self._refresh_current_flow_label()
         self.workflow_panel._prefill_node_table(workflow.get_node_list())
+        self._sync_flow_graph(workflow)
         self._refresh_workflow_actions()
         logger.info(f"流程切换: Name={workflow.name}")
 
@@ -2227,24 +2269,22 @@ class Window(QWidget):
     def _show_job_result(self, job_id: str) -> None:
         """弹出 dialog_result 显示该任务当前的结果数据 (作业库 summary 字段).
 
+        无条件打开: 尚无结果时也打开空表, 便于随时查看最新结果.
         与 history 页补录同一写法: 对话框确认后, 整块更新 summary/meta
         两列并把补录条目并入 logs 留痕; 取消则什么都不写.
         """
-        job = self._db_jobs.get(job_id)
+        job = None
+        try:
+            job = jobstore.get_job(self._job_db_path(), job_id)
+        except Exception:
+            logger.exception("读取作业记录失败: id=%s", job_id)
         if job is None:
-            try:
-                job = jobstore.get_job(self._job_db_path(), job_id)
-            except Exception:
-                logger.exception("读取作业记录失败: id=%s", job_id)
-                job = None
+            job = self._db_jobs.get(job_id)
         if job is None:
             QMessageBox.information(self, "查看结果", "未找到该任务的作业记录")
             return
         summary = job.get("summary")
-        if not isinstance(summary, dict) or not summary:
-            QMessageBox.information(self, "查看结果", "该任务尚无结果数据")
-            return
-        result_data = copy.deepcopy(summary)
+        result_data = copy.deepcopy(summary) if isinstance(summary, dict) else {}
         items = [
             (name, item)
             for name, item in result_data.items()
@@ -2254,9 +2294,6 @@ class Window(QWidget):
             items = [
                 (name, item) for name, item in result_data.items() if isinstance(item, dict)
             ]
-        if not items:
-            QMessageBox.information(self, "查看结果", "该任务没有可显示的结果数据")
-            return
         meta = dict(job.get("meta") or {})
         dialog = ResultDialog(
             items,
@@ -2362,12 +2399,20 @@ class Window(QWidget):
             return
         instance = entry["instance"]
         job = entry["job"]
-        # 只允许删除从未开始过的工单; 已产生记录的作业保留在作业库中
-        if instance is not None and instance["workflow"].state != WorkflowState.IDLE:
-            return
-        if job is not None and (
-            job.get("started_at") or str(job.get("state") or "") != jobstore.STATE_IDLE
-        ):
+        # 任何状态的任务都可删除: 先弹窗确认, 确认后连同作业库记录一并删除
+        name = ""
+        if instance is not None:
+            name = str(instance["workflow"].name or "")
+        elif job is not None:
+            name = str(job.get("name") or "")
+        answer = QMessageBox.question(
+            self,
+            "删除任务",
+            f"确定要删除任务“{name}”吗?\n删除后其作业记录与结果数据将一并删除, 不可恢复。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
             return
         try:
             jobstore.delete_job(self._job_db_path(), target_id)

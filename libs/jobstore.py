@@ -246,7 +246,7 @@ def list_jobs(
 
 
 def delete_job(db_path: str | Path, job_id: str) -> bool:
-    """删除一行作业; 只应作用于从未开始过的工单 (调用方负责判断)."""
+    """删除一行作业 (任何状态均可; 是否允许删、删前确认由调用方负责)."""
     ensure_schema(db_path)
     with _connect(db_path) as conn:
         cursor = conn.execute(f"DELETE FROM {TABLE} WHERE id=?", (job_id,))
