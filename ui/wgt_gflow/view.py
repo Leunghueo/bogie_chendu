@@ -4,17 +4,50 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 from ui.wgt_gflow._view import Ui_Form
 
+_CHIP_HEIGHT = 41
+_CHIP_MIN_HEIGHT = 20
+_CHIP_SPACING = 10
+
+
+def _parse_gnode(gnode: str) -> tuple[str, int] | None:
+    """把 node 的 gnode 解析为 (区域键, 区域内序号), 与 _view.ui 里的 garea_* 容器对应.
+
+    约定 (与改造前的定点 label 编号完全一致, workflow JSON 无需改动):
+    - ``gnode_head`` / ``gnode_end``: 专用单节点区域;
+    - 一位数字 (``gnode_1`` .. ``gnode_9``): 顶部主列区域 ``top``, 序号即该数字;
+    - 两位及以上数字: 首位是区域号 (``gnode_201`` -> 区域 ``2``), 其余是区域内序号 (01).
+    其余形式返回 None. gnode 为空或区域不存在时该 node 只不显示, 不影响 workflow 本身.
+    """
+    if not gnode or not gnode.startswith("gnode_"):
+        return None
+    suffix = gnode[len("gnode_"):]
+    if suffix in ("head", "end"):
+        return suffix, 0
+    if suffix.isdigit():
+        if len(suffix) == 1:
+            return "top", int(suffix)
+        return suffix[0], int(suffix[1:])
+    return None
+
 
 class FlowGraph(QWidget):
+    """流程示意图: _view.ui 只定义区域容器 (garea_*), 区域内的节点 chip 运行时按
+    workflow 动态生成. 某个区域里没有节点时不留空框, 节点数变化只影响本区域的排列.
+    """
+
     def __init__(self) -> None:
         super().__init__()
         # 设置 size policy 为 Expander，允许自适应缩放
         size_policy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setSizePolicy(size_policy)
+        self.graph: Ui_Form | None = None
+        self._regions: dict[str, QVBoxLayout] = {}
+        self._chips: dict[str, QLabel] = {}
+        self._signature: tuple | None = None
         self._build_empty_ui()
 
     def _build_ui(self) -> None:
-        layout=self.layout()
+        layout = self.layout()
         if layout is None:
             return
         while layout.count():
@@ -22,19 +55,23 @@ class FlowGraph(QWidget):
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
-            else:
-                sub_layout = item.layout()
-                if sub_layout is not None:
-                    clear_layout(sub_layout)
 
         self.graph = Ui_Form()
         self.graph.setupUi(self.graph)
-
-        for label in self.graph.findChildren(QLabel):
-            if label.objectName().startswith("gnode"):
-                label.setText(label.objectName())
-
         layout.addWidget(self.graph)
+
+        self._regions = {}
+        self._chips = {}
+        self._signature = None
+        for area in self.graph.findChildren(QWidget):
+            name = area.objectName()
+            if not name.startswith("garea_"):
+                continue
+            region_layout = QVBoxLayout(area)
+            region_layout.setContentsMargins(0, 0, 0, 0)
+            region_layout.setSpacing(_CHIP_SPACING)
+            region_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+            self._regions[name[len("garea_"):]] = region_layout
 
     def _build_empty_ui(self) -> None:
         """Build the placeholder displayed when no flow graph is available."""
@@ -47,18 +84,13 @@ class FlowGraph(QWidget):
         layout.addWidget(self.empty_label)
 
     def update(self, workflow) -> None:
-        '''
-        这是一个通过`workflow数据`更新`FlowGraph`控件样式的方法,同时也是该控件的**核心功能**
-        具体逻辑如下:
-        1. 传递进来的`workflow`包含了流程的所有节点实例.每个实例都有一个`gnode`字段.
-        2. 如果`gnode`非空, 例如"gnode_101", 那么查找`objectName==gnode_101`的控件, 并**根据node实例更新该QLabel的样式**,具体如下:
-            3.1 将该QLabel的text设置为`该node的node_name`;
-            3.2 获取该node实例的`state`, 并设置QLabel的背景色(IDLE/DONE为灰色, RUNNING为绿色, ERROR为红色)
-        3. 如果`gnode`为其他 则跳过;
-        注意: 该方法的触发时机为`view_home`页面的`workflow`的每次节点状态变化.
-        请完成该方法.
-        '''
-        self._build_ui()
+        """根据 workflow 的节点更新示意图.
+
+        节点集合 (id/gnode/名称) 没变时只刷新已有 chip 的文字与状态色;
+        变了才按区域重建 chip. gnode 为空的节点不生成 chip.
+        """
+        if self.graph is None:
+            self._build_ui()
         from wf import WorkflowState
 
         color_map = {
@@ -71,22 +103,67 @@ class FlowGraph(QWidget):
         if workflow is None or not hasattr(workflow, 'nodes'):
             return
 
-        for node in workflow.nodes.values():
-            gnode_name = getattr(node, 'gnode', '')
-            if not gnode_name:
+        entries: list[tuple[str, int, int, object]] = []
+        for seq, node in enumerate(workflow.nodes.values()):
+            parsed = _parse_gnode(getattr(node, 'gnode', '') or '')
+            if parsed is None:
                 continue
-
-            label = self.graph.findChild(QLabel, gnode_name)
-            if label is None:
+            region, order = parsed
+            if region not in self._regions:
                 continue
+            entries.append((region, order, seq, node))
 
-            label.setText(node.node_name)
+        signature = tuple(sorted(
+            (node.node_id, region, order, node.node_name)
+            for region, order, _, node in entries
+        ))
+        if signature != self._signature:
+            self._rebuild_chips(entries)
+            self._signature = signature
 
+        for _, _, _, node in entries:
+            chip = self._chips.get(node.node_id)
+            if chip is None:
+                continue
+            chip.setText(node.node_name)
             state = getattr(node, 'state', WorkflowState.IDLE)
             bg_color = color_map.get(state, "#E8E8E8")
-            label.setStyleSheet(
+            chip.setStyleSheet(
                 f"color: rgb(0, 0, 0);"
                 f"border: 1px solid;"
                 f"border-radius: 8px;"
                 f"background-color: {bg_color};"
             )
+
+    def _rebuild_chips(self, entries: list[tuple[str, int, int, object]]) -> None:
+        for region_layout in self._regions.values():
+            while region_layout.count():
+                item = region_layout.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
+        self._chips = {}
+
+        grouped: dict[str, list[tuple[int, int, object]]] = {}
+        for region, order, seq, node in entries:
+            grouped.setdefault(region, []).append((order, seq, node))
+
+        for region, items in grouped.items():
+            region_layout = self._regions[region]
+            items.sort(key=lambda entry: (entry[0], entry[1]))
+            area = region_layout.parentWidget()
+            avail = area.height() if area is not None else _CHIP_HEIGHT
+            count = len(items)
+            if count == 1:
+                chip_height = min(_CHIP_HEIGHT, max(_CHIP_MIN_HEIGHT, avail))
+            else:
+                fit = (avail - (count - 1) * _CHIP_SPACING) // count
+                chip_height = max(_CHIP_MIN_HEIGHT, min(_CHIP_HEIGHT, fit))
+            for _, _, node in items:
+                chip = QLabel(node.node_name)
+                chip.setObjectName(f"chip_{node.node_id}")
+                chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                chip.setWordWrap(True)
+                chip.setFixedHeight(int(chip_height))
+                region_layout.addWidget(chip)
+                self._chips[node.node_id] = chip
