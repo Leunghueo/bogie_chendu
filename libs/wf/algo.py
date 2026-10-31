@@ -169,6 +169,71 @@ async def run_wait(node: "Node", workflow: "Workflow", data: Any) -> Any:
     await node._sleep(workflow, seconds_value)
     return None
 
+def _coerce_set_value(raw: Any) -> Any:
+    """set 的字符串值归一化: 与 cond/done 右值的 _coerce_done_target 同语义.
+
+    "true"/"false" -> 布尔, 数字字符串 -> int/float, 其余原样.
+    这样即便在编辑器里把值写成文本, TEMP@FLAG=true 之后 cond 的
+    TEMP@FLAG=true 也能按布尔命中, 不会因字符串 "true" 失配.
+    """
+    if not isinstance(raw, str):
+        return raw
+    text = raw.strip()
+    lowered = text.lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    try:
+        number = float(text)
+    except ValueError:
+        return raw
+    return int(number) if number.is_integer() else number
+
+
+@register_algo("set")
+async def run_set(node: "Node", workflow: "Workflow", data: Any) -> Any:
+    """通用中间变量赋值: 把 args.data 的每个键值对写进 试验参数.
+
+    用法 (sys 节点): {"algo": "set", "data": {"TEMP@FLAG": true, "TEMP@COUNT": 123}}
+    一个节点可同时设多个变量, 已存在的键直接覆盖 (即"改变").
+    值的解析 (与既有约定一致):
+    - 字符串 "随机数" -> 100~500 的随机数 (同 plc 动作值的 随机数 约定)
+    - 字符串与某个已有试验参数同名 -> 复制该参数当前值
+    - 其余字符串按 _coerce_set_value 归一化 (true/123/1.5 转成真类型)
+    - 非字符串值 (布尔/数字/列表/对象) 原样写入
+    返回实际写入的 {键: 值}, 由 run_sys 存入 node.result 备查.
+    """
+    if not isinstance(data, dict) or not data:
+        raise WorkflowError(
+            f"set algo on node {node.node_id} requires args.data to be a non-empty object"
+        )
+    params = workflow.data.get("试验参数")
+    if params is None:
+        params = {}
+        workflow.data["试验参数"] = params
+    if not isinstance(params, dict):
+        raise WorkflowError("set algo requires workflow.data['试验参数'] to be a dict")
+
+    written: dict[str, Any] = {}
+    for key, raw_value in data.items():
+        name = str(key).strip()
+        if not name:
+            raise WorkflowError(f"set algo on node {node.node_id} has an empty key")
+        value = raw_value
+        if isinstance(value, str):
+            probe = value.strip()
+            if probe == "随机数":
+                value = random.uniform(100, 500)
+            elif probe in params:
+                value = params[probe]
+            else:
+                value = _coerce_set_value(value)
+        params[name] = value
+        written[name] = value
+    return written
+
+
 # 切换到指定页面
 @register_algo("switch_tab")
 async def switch_tab(node: "Node", workflow: "Workflow", data: Any) -> Any:
