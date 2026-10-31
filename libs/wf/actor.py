@@ -442,6 +442,45 @@ async def run_select(node: Node, workflow: "Workflow") -> str:
     return selected
 
 
+@register_node_actor("cond")
+async def run_cond(node: Node, workflow: "Workflow") -> str:
+    """条件分支: args.expr 为真走 next[0], 为假走 next[1].
+
+    expr 与 plc_batch 的 done_list 同一文法: 单个比较式 (点 = / > / < 值,
+    右值可引用试验参数), 也可给一个列表表示 AND (全部为真才为真).
+    与 select 不同, cond 不走 owner-select 回溯: 两条支路必须各自显式
+    指向汇合节点 (或 end), 因此可以有多个 cond、也可以嵌套.
+    表达式缺失/非法直接报错, 不静默选支路.
+    """
+    if len(node.next_nodes) != 2:
+        raise WorkflowError(
+            f"cond node {node.node_id} must have exactly two next nodes (true, false)"
+        )
+    raw_expr = node.args.get("expr")
+    if isinstance(raw_expr, str):
+        exprs = [raw_expr]
+    elif isinstance(raw_expr, (list, tuple)):
+        exprs = [str(item) for item in raw_expr]
+    else:
+        exprs = []
+    exprs = [text for text in (item.strip() for item in exprs) if text]
+    if not exprs:
+        raise WorkflowError(f"cond node {node.node_id} has no expr")
+
+    result = True
+    evaluated: list[str] = []
+    for raw in exprs:
+        resolved = _resolve_done_expression(raw, workflow)
+        if resolved is None:
+            raise WorkflowError(f"cond node {node.node_id} has empty expr: {raw!r}")
+        evaluated.append(resolved)
+        if not await asyncio.to_thread(_evaluate_done_expression, resolved):
+            result = False
+            break
+    node.result = {"expr": evaluated, "result": result}
+    return node.next_nodes[0] if result else node.next_nodes[1]
+
+
 @register_node_actor("loop_begin")
 async def run_loop_begin(node: Node, workflow: "Workflow") -> str | None:
     if workflow.flags["循环起点"] != node.node_id or workflow.flags["循环次数"] is None:

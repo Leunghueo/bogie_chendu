@@ -494,6 +494,11 @@ class Workflow:
             if node.node_type == "select":
                 if len(node.next_nodes) < 2:
                     raise WorkflowError(f"select node {node.node_id} must have at least two next nodes")
+            elif node.node_type == "cond":
+                if len(node.next_nodes) != 2:
+                    raise WorkflowError(
+                        f"cond node {node.node_id} must have exactly two next nodes (true, false)"
+                    )
             elif len(node.next_nodes) > 1:
                 raise WorkflowError(f"node {node.node_id} must not have multiple next nodes")
 
