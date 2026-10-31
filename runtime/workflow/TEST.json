@@ -53,47 +53,9 @@
       "gnode": "gnode_end",
       "next": []
     },
-    "cc476e97": {
-      "node_id": "cc476e97",
-      "node_name": "测试plc_batch",
-      "type": "plc_batch",
-      "desc": "可以执行并行的plc写入操作",
-      "meta": {},
-      "args": {
-        "delay": 0,
-        "confirm": false,
-        "actlist": [
-          {
-            "pt_name": "设定加载头1快进垂向位移",
-            "value": "压头快进位置"
-          },
-          {
-            "pt_name": "设定加载头2快进垂向位移",
-            "value": "压头快进位置"
-          },
-          {
-            "pt_name": "设定空气弹簧工作高度",
-            "value": 100
-          },
-          {
-            "pt_name": "启动液压系统",
-            "value": true,
-            "reset": false
-          }
-        ],
-        "done_list": [
-          "气压采集1<100",
-          "气压采集2<100"
-        ]
-      },
-      "gnode": "gnode_502",
-      "next": [
-        "495015f8"
-      ]
-    },
     "23b00423": {
       "node_id": "23b00423",
-      "node_name": "计算结果",
+      "node_name": "模拟计算",
       "type": "sys",
       "desc": "上位机指令,根据配置反算PLC压力",
       "meta": {},
@@ -104,7 +66,7 @@
         "algo": "cal_press_trail",
         "data": {}
       },
-      "gnode": "",
+      "gnode": "gnode_403",
       "next": [
         "d3d26512"
       ]
@@ -123,12 +85,12 @@
         "data": {},
         "gnode": ""
       },
-      "gnode": "",
+      "gnode": "gnode_404",
       "next": []
     },
     "495015f8": {
       "node_id": "495015f8",
-      "node_name": "测试计算",
+      "node_name": "模拟自重",
       "type": "sys",
       "desc": "上位机指令,根据配置反算PLC压力",
       "meta": {},
@@ -140,7 +102,7 @@
         "data": {},
         "gnode": ""
       },
-      "gnode": "",
+      "gnode": "gnode_402",
       "next": [
         "23b00423"
       ]
@@ -177,7 +139,7 @@
         "info": "",
         "algo": "switch_tab",
         "data": {
-          "tab": "view_dyn_dims"
+          "tab": "view_home"
         }
       },
       "next": [],
@@ -244,7 +206,7 @@
       "next": [
         "f949cfd5"
       ],
-      "gnode": "gnode_601"
+      "gnode": "gnode_701"
     },
     "f949cfd5": {
       "node_id": "f949cfd5",
@@ -324,7 +286,8 @@
         "326f7d41",
         "ed15715d",
         "0a9d9363",
-        "end"
+        "end",
+        "d46c5c1b"
       ],
       "require_node": "",
       "gnode": "gnode_head"
@@ -384,13 +347,15 @@
           "seconds": 1
         }
       },
-      "next": [],
+      "next": [
+        "2781a32a"
+      ],
       "require_node": "",
       "gnode": "gnode_301"
     },
     "bf2c250a": {
       "node_id": "bf2c250a",
-      "node_name": "空气测试",
+      "node_name": "算法测试",
       "type": "sys",
       "desc": "上位机指令,根据args的algo区分",
       "meta": {},
@@ -404,14 +369,14 @@
         }
       },
       "next": [
-        "9fb97883"
+        "495015f8"
       ],
       "require_node": "",
       "gnode": "gnode_401"
     },
     "326f7d41": {
       "node_id": "326f7d41",
-      "node_name": "ALGO测试",
+      "node_name": "ALGO测试1",
       "type": "sys",
       "desc": "上位机指令,根据args的algo区分",
       "meta": {},
@@ -439,11 +404,11 @@
       "args": {
         "delay": 0,
         "confirm": false,
-        "expr": "加载压力1>5"
+        "expr": "TEMP@空簧准备=true"
       },
       "next": [
-        "cc476e97",
-        "23b00423"
+        "9fb97883",
+        "c8a736bb"
       ],
       "require_node": "",
       "gnode": ""
@@ -460,11 +425,11 @@
         "info": "",
         "actlist": [
           {
-            "pt_name": "压头横向1",
+            "pt_name": "设定1位加载头横向移动目标位置",
             "value": "TEMP@压头DX1"
           },
           {
-            "pt_name": "压头横向2",
+            "pt_name": "设定2位加载头横向移动目标位置",
             "value": "TEMP@压头DX2"
           },
           {
@@ -591,69 +556,304 @@
       "next": [],
       "require_node": "",
       "gnode": ""
+    },
+    "d46c5c1b": {
+      "node_id": "d46c5c1b",
+      "node_name": "ALGO测试2",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "info": "",
+        "algo": "wait",
+        "data": {
+          "seconds": 1
+        }
+      },
+      "next": [
+        "f61ac794"
+      ],
+      "require_node": "",
+      "gnode": "gnode_601"
+    },
+    "f61ac794": {
+      "node_id": "f61ac794",
+      "node_name": "条件分支",
+      "type": "cond",
+      "desc": "按表达式选择分支: expr 为真走 next 第一个, 为假走第二个; expr 可为单个比较式或列表(AND), 文法同 plc_batch 的 done_list",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "expr": "TEMP@空簧准备=true"
+      },
+      "next": [
+        "a84703e7",
+        "f47b3738"
+      ],
+      "require_node": "",
+      "gnode": ""
+    },
+    "44f75265": {
+      "node_id": "44f75265",
+      "node_name": "差压1",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "plot_air",
+        "data": {
+          "enabled": true,
+          "trail_type": "差压1>2"
+        },
+        "gnode": ""
+      },
+      "next": [
+        "aaa9e8b5"
+      ],
+      "gnode": ""
+    },
+    "a84703e7": {
+      "node_id": "a84703e7",
+      "node_name": "切换页面",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "switch_tab",
+        "data": {
+          "tab": "view_airplot"
+        }
+      },
+      "next": [
+        "44f75265"
+      ],
+      "gnode": ""
+    },
+    "642a829c": {
+      "node_id": "642a829c",
+      "node_name": "切换页面",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "switch_tab",
+        "data": {
+          "tab": "view_home"
+        }
+      },
+      "next": [],
+      "gnode": ""
+    },
+    "57e4f995": {
+      "node_id": "57e4f995",
+      "node_name": "空簧保压完成",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "plot_air",
+        "data": {
+          "cmd": false,
+          "trail_type": "差压1>2"
+        },
+        "gnode": ""
+      },
+      "next": [
+        "642a829c"
+      ],
+      "gnode": ""
+    },
+    "aaa9e8b5": {
+      "node_id": "aaa9e8b5",
+      "node_name": "上位机指令",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "等待测试",
+        "algo": "wait",
+        "data": {
+          "seconds": "回流计时"
+        }
+      },
+      "next": [
+        "57e4f995"
+      ],
+      "gnode": ""
+    },
+    "c8a736bb": {
+      "node_id": "c8a736bb",
+      "node_name": "空簧准备工作",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "等待测试",
+        "algo": "wait",
+        "data": {
+          "seconds": 5
+        }
+      },
+      "next": [
+        "3ed12ebb"
+      ],
+      "gnode": ""
+    },
+    "f47b3738": {
+      "node_id": "f47b3738",
+      "node_name": "空簧准备工作 Copy",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "等待测试",
+        "algo": "wait",
+        "data": {
+          "seconds": 5
+        }
+      },
+      "next": [
+        "639a8400"
+      ],
+      "gnode": ""
+    },
+    "3ed12ebb": {
+      "node_id": "3ed12ebb",
+      "node_name": "标志",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "等待测试",
+        "algo": "set",
+        "data": {
+          "TEMP@空簧准备": true
+        }
+      },
+      "next": [
+        "9fb97883"
+      ],
+      "gnode": ""
+    },
+    "639a8400": {
+      "node_id": "639a8400",
+      "node_name": "标志",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "等待测试",
+        "algo": "set",
+        "data": {
+          "TEMP@空簧准备": true
+        }
+      },
+      "next": [
+        "a84703e7"
+      ],
+      "gnode": ""
+    },
+    "2781a32a": {
+      "node_id": "2781a32a",
+      "node_name": "标志",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "等待测试",
+        "algo": "set",
+        "data": {
+          "TEMP@空簧准备": false
+        }
+      },
+      "next": [],
+      "gnode": ""
     }
   },
   "ui": {
     "nodes": {
       "84384357": {
-        "x": 1372,
-        "y": 728
+        "x": 1681.1363636363635,
+        "y": 1112.6363636363635
       },
       "head": {
         "x": 1372,
         "y": 56
       },
       "end": {
-        "x": 2436,
-        "y": 252
-      },
-      "cc476e97": {
-        "x": 1708,
-        "y": 868
+        "x": 2856,
+        "y": 196
       },
       "23b00423": {
-        "x": 1904,
-        "y": 1176
+        "x": 1372,
+        "y": 812
       },
       "d3d26512": {
-        "x": 1904,
-        "y": 1344
+        "x": 1372,
+        "y": 952
       },
       "495015f8": {
-        "x": 1708,
-        "y": 1036
+        "x": 1372,
+        "y": 644
       },
       "9fb97883": {
-        "x": 1372,
-        "y": 616
+        "x": 1681.1363636363635,
+        "y": 972.6363636363636
       },
       "f3e7968d": {
-        "x": 1372,
-        "y": 1148
+        "x": 1681.1363636363635,
+        "y": 1504.6363636363635
       },
       "a3d0a15e": {
-        "x": 1372,
-        "y": 1008
+        "x": 1681.1363636363635,
+        "y": 1364.6363636363635
       },
       "1619b695": {
-        "x": 1372,
-        "y": 868
+        "x": 1681.1363636363635,
+        "y": 1252.6363636363635
       },
       "ed15715d": {
-        "x": 2184,
-        "y": 336
+        "x": 2632,
+        "y": 280
       },
       "f949cfd5": {
-        "x": 2184,
-        "y": 532
+        "x": 2632,
+        "y": 476
       },
       "44fd187c": {
-        "x": 2184,
-        "y": 672
+        "x": 2632,
+        "y": 616
       },
       "75a8edab": {
-        "x": 2184,
-        "y": 840
+        "x": 2632,
+        "y": 784
       },
       "0474a84d": {
         "x": 1372,
@@ -661,7 +861,7 @@
       },
       "e654427e": {
         "x": 868,
-        "y": 365.1363636363636
+        "y": 364
       },
       "0a9d9363": {
         "x": 616,
@@ -680,7 +880,7 @@
         "y": 476
       },
       "ac149162": {
-        "x": 1904,
+        "x": 1680,
         "y": 644
       },
       "7e4fd1a5": {
@@ -693,25 +893,73 @@
       },
       "a5cf2b6e": {
         "x": 868,
-        "y": 815.4090909090909
+        "y": 812
       },
       "b5dcaec5": {
-        "x": 866.9583333333333,
-        "y": 967.625
+        "x": 868,
+        "y": 980
       },
       "ee9b5b39": {
-        "x": 866.9583333333333,
-        "y": 1245.5416666666667
+        "x": 868,
+        "y": 1148
       },
       "398ceaa6": {
         "x": 868,
-        "y": 1400
+        "y": 1288
+      },
+      "d46c5c1b": {
+        "x": 2352,
+        "y": 364
+      },
+      "f61ac794": {
+        "x": 2352,
+        "y": 504
+      },
+      "44f75265": {
+        "x": 2355.125,
+        "y": 1193.2500000000002
+      },
+      "a84703e7": {
+        "x": 2355.125,
+        "y": 1053.2500000000002
+      },
+      "642a829c": {
+        "x": 2355.125,
+        "y": 1669.2500000000002
+      },
+      "57e4f995": {
+        "x": 2355.125,
+        "y": 1501.2500000000002
+      },
+      "aaa9e8b5": {
+        "x": 2355.125,
+        "y": 1361.2500000000002
+      },
+      "c8a736bb": {
+        "x": 1914.0822510822513,
+        "y": 739.8403679653679
+      },
+      "f47b3738": {
+        "x": 2203.5505050505053,
+        "y": 689.4772727272729
+      },
+      "3ed12ebb": {
+        "x": 1913.5703463203463,
+        "y": 855.9951298701299
+      },
+      "639a8400": {
+        "x": 2203.317141192141,
+        "y": 808.2419247419248
+      },
+      "2781a32a": {
+        "x": 1120.235119047619,
+        "y": 624.7337662337662
       }
     },
     "viewport": {
-      "x": -630.3638889094568,
-      "y": -484.4171771538621,
-      "zoom": 0.96
+      "x": -1046.7850759693943,
+      "y": -209.15597851587415,
+      "zoom": 0.72
     }
   }
 }

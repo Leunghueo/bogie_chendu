@@ -375,11 +375,11 @@ async def init_cal(node: "Node", workflow: "Workflow", data: Any) -> Any:
     _vsp = get_runtime()["vsp"]
     _can = get_runtime()["can"]
 
-    head1_dx = workflow.data["试验参数"]["压头1横向位移"] - vsp.read("压头横向1")
-    head2_dx = workflow.data["试验参数"]["压头2横向位移"] - vsp.read("压头横向2")
+    head1_dx = workflow.data["试验参数"]["压头1横向位移"] - _vsp.read("压头横向1")
+    head2_dx = workflow.data["试验参数"]["压头2横向位移"] - _vsp.read("压头横向2")
 
-    workflow.data["试验参数"]["TEMP@压头DX1"] =  head1_move
-    workflow.data["试验参数"]["TEMP@压头DX2"] =  head2_move
+    workflow.data["试验参数"]["TEMP@压头DX1"] =  head1_dx
+    workflow.data["试验参数"]["TEMP@压头DX2"] =  head2_dx
     
     return None
 
