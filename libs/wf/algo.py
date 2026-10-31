@@ -86,6 +86,62 @@ def calc_each(workflow: "Workflow"):
             v["结论"] =  "-"
             # logging.warning(f"计算判定过程报错: {k}")
 
+def rename_summary_items(workflow: "Workflow", renames: dict[str, str]) -> None:
+    """仅把日志 summary 记录里的测量项改名, 数值与其余内容一律不动.
+
+    内存日志 (workflow.logs) 改名后整块重写作业行: summary 单列字段与 logs
+    数组在落库时从 logs 现状重新推导, 保证历史页面/导出报告读到改名后的名称.
+    """
+    _rename_summary_entries(workflow.logs, renames)
+    persist = getattr(workflow, "persist_job_snapshot", None)
+    if callable(persist):
+        persist()
+
+def _renamed_extra(extra: dict[str, Any], renames: dict[str, str]) -> dict[str, Any] | None:
+    """生成改名后的 extra 副本; 无需改名时返回 None.
+
+    返回副本而非就地修改: summary 的 extra 可能就是 workflow.data["结果数据"] 本身,
+    就地改名会连带改掉结果数据, 这里只让日志持有改名后的副本.
+    """
+    renamed: dict[str, Any] = {}
+    changed = False
+    for name, item in extra.items():
+        new_name = renames.get(name, name)
+        renamed[new_name] = item
+        changed = changed or new_name != name
+    return renamed if changed else None
+
+def _rename_summary_entries(entries: list[dict[str, Any]], renames: dict[str, str]) -> None:
+    for entry in entries:
+        if not isinstance(entry, dict) or entry.get("event") != "summary":
+            continue
+        extra = entry.get("extra")
+        if not isinstance(extra, dict):
+            continue
+        renamed = _renamed_extra(extra, renames)
+        if renamed is not None:
+            entry["extra"] = renamed
+
+def _fix_switch_path() -> Path:
+    """回撤(数据修正)开关文件路径: <base_dir>/runtime/fix.
+
+    文件存在即启用回撤(内容无所谓, 空文件即可); base_dir 由 _runtime 提供,
+    打包后为 exe 同级目录, 未打包时为 src 目录。
+    """
+    return Path(get_runtime()["base_dir"]) / "runtime" / "fix"
+
+def _fix_enabled() -> bool:
+    """回撤开关是否启用: runtime 目录下存在名为 fix 的文件时为 True。
+
+    每次调用实时判定(一次 stat, 开销可忽略), 现场增删该文件后即刻生效,
+    无需重启程序; runtime 未初始化等异常一律视为关闭, 不影响算法执行。
+    """
+    try:
+        return _fix_switch_path().exists()
+    except Exception:  # noqa: BLE001  # 运行时未初始化/路径非法时按"未启用"处理
+        return False
+
+
 # 等待算法
 @register_algo("wait")
 async def run_wait(node: "Node", workflow: "Workflow", data: Any) -> Any:
@@ -248,31 +304,19 @@ async def plot_air(node: "Node", workflow: "Workflow", data: Any) -> Any:
     return None
 
 # 换算空载/满载/偏载的plc数值--->试验参数
-@register_algo("init_cal")
+@register_algo("cal_head")
 async def init_cal(node: "Node", workflow: "Workflow", data: Any) -> Any:
-    # 用不着
+    _plc = get_runtime()["plc"]
+    _vsp = get_runtime()["vsp"]
+    _can = get_runtime()["can"]
+
+    head1_dx = workflow.data["试验参数"]["压头1横向位移"] - vsp.read("压头横向1")
+    head2_dx = workflow.data["试验参数"]["压头2横向位移"] - vsp.read("压头横向2")
+
+    workflow.data["试验参数"]["TEMP@压头DX1"] =  head1_move
+    workflow.data["试验参数"]["TEMP@压头DX2"] =  head2_move
+    
     return None
-
-def _fix_switch_path() -> Path:
-    """回撤(数据修正)开关文件路径: <base_dir>/runtime/fix.
-
-    文件存在即启用回撤(内容无所谓, 空文件即可); base_dir 由 _runtime 提供,
-    打包后为 exe 同级目录, 未打包时为 src 目录。
-    """
-    return Path(get_runtime()["base_dir"]) / "runtime" / "fix"
-
-
-def _fix_enabled() -> bool:
-    """回撤开关是否启用: runtime 目录下存在名为 fix 的文件时为 True。
-
-    每次调用实时判定(一次 stat, 开销可忽略), 现场增删该文件后即刻生效,
-    无需重启程序; runtime 未初始化等异常一律视为关闭, 不影响算法执行。
-    """
-    try:
-        return _fix_switch_path().exists()
-    except Exception:  # noqa: BLE001  # 运行时未初始化/路径非法时按"未启用"处理
-        return False
-
 
 # 计算--->载荷试验
 @register_algo("cal_press_trail")
@@ -423,7 +467,6 @@ async def cal_air_21(node: "Node", workflow: "Workflow", data: Any) -> Any:
     # workflow._append_workflow_log(event_name = "差压阀试验2->1计算", extra = workflow.data["结果数据"])
     return None
 
-
 # 计算--->汇总结果
 @register_algo("summary")
 async def summary(node: "Node", workflow: "Workflow", data: Any) -> Any:
@@ -436,7 +479,6 @@ async def summary(node: "Node", workflow: "Workflow", data: Any) -> Any:
         "空簧气压2": list(process.get("空簧气压2") or []),
     })
     return None
-
 
 # 安全检查
 @register_algo("guard")
@@ -484,42 +526,3 @@ async def fix_report(node: "Node", workflow: "Workflow", data: Any) -> Any:
         "4位轮重": "8位轮重",
     })
     return None
-
-
-def rename_summary_items(workflow: "Workflow", renames: dict[str, str]) -> None:
-    """仅把日志 summary 记录里的测量项改名, 数值与其余内容一律不动.
-
-    内存日志 (workflow.logs) 改名后整块重写作业行: summary 单列字段与 logs
-    数组在落库时从 logs 现状重新推导, 保证历史页面/导出报告读到改名后的名称.
-    """
-    _rename_summary_entries(workflow.logs, renames)
-    persist = getattr(workflow, "persist_job_snapshot", None)
-    if callable(persist):
-        persist()
-
-
-def _renamed_extra(extra: dict[str, Any], renames: dict[str, str]) -> dict[str, Any] | None:
-    """生成改名后的 extra 副本; 无需改名时返回 None.
-
-    返回副本而非就地修改: summary 的 extra 可能就是 workflow.data["结果数据"] 本身,
-    就地改名会连带改掉结果数据, 这里只让日志持有改名后的副本.
-    """
-    renamed: dict[str, Any] = {}
-    changed = False
-    for name, item in extra.items():
-        new_name = renames.get(name, name)
-        renamed[new_name] = item
-        changed = changed or new_name != name
-    return renamed if changed else None
-
-
-def _rename_summary_entries(entries: list[dict[str, Any]], renames: dict[str, str]) -> None:
-    for entry in entries:
-        if not isinstance(entry, dict) or entry.get("event") != "summary":
-            continue
-        extra = entry.get("extra")
-        if not isinstance(extra, dict):
-            continue
-        renamed = _renamed_extra(extra, renames)
-        if renamed is not None:
-            entry["extra"] = renamed
