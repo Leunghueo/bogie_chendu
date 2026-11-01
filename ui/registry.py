@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QDialog, QVBoxLayout
 from _runtime import get_runtime
 
 from .dialog_about.view import Window as AboutDialog
+from .dialog_manual.view import Window as ManualDialog
 from .dialog_airplot.view import Window as AirplotView
 from .dialog_dyn_dims.view import Window as DynDimsView
 from .dialog_pts.view import Window as PtsView
@@ -86,6 +87,7 @@ VIEWS = {
     "dialog_push_setting": {"title": "信息化设置", "obj": PushSetting},
     "dialog_user_admin": {"title": "用户管理", "obj": UserDialog},
     "dialog_about": {"title": "关于", "obj": AboutDialog},
+    "dialog_manual": {"title": "使用说明", "obj": ManualDialog},
 }
 
 MENUS = {
@@ -150,6 +152,14 @@ MENUS = {
         },
     ],
     "帮助": [
+        {
+            "title": "使用说明",
+            "icon": "about.png",
+            "view_id": "dialog_manual",
+            "pop": True,
+            "fixed": False,
+            "admin": False,
+        },
         {
             "title": "关于",
             "icon": "about.png",
