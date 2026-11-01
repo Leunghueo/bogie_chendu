@@ -13,18 +13,20 @@ for import_path in (BASE_DIR, BASE_DIR / "libs"):
     if text not in sys.path:
         sys.path.insert(0, text)
 
+from logger import configure_application_logging
+
+# 日志先于其余模块配置: _runtime 等模块在 import 期就会写日志 (如 Runtime size),
+# 配置晚了这些早期日志会丢.
+configure_application_logging(BASE_DIR)
+logger = logging.getLogger(__name__)
+
 from PySide6.QtWidgets import QApplication, QDialog
 
 from _runtime import get_runtime, source_enabled, update_runtime
-from logger import configure_application_logging
 from ui.theme import apply_theme
 from ui.registry import load_ui_registry
 from ui.view_frame.view import Window as MainFrame
 from ui.view_login.view import Window as LoginWindow
-
-
-configure_application_logging(BASE_DIR)
-logger = logging.getLogger(__name__)
 
 
 def _load_runtime() -> dict[str, object]:

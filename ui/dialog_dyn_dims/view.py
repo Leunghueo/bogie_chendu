@@ -11,7 +11,8 @@ from _runtime import bed_section, get_runtime
 from ui.dialog_fit.view import Window as FitDialog
 
 from ._view import Ui_Form
-import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Window(QWidget):
@@ -93,7 +94,7 @@ class Window(QWidget):
 
     def _toggle_view(self, view_type):
         if view_type=="sensor":
-            print("传感器视图")
+            logger.debug("传感器视图")
             ctrls = self.findChildren(QLabel)
             for lbl in ctrls:
                 lbl.show()
@@ -102,7 +103,7 @@ class Window(QWidget):
                     lbl.hide()
 
         if view_type=="cal":
-            print("计算视图")
+            logger.debug("计算视图")
             ctrls = self.findChildren(QLabel)
             for lbl in ctrls:
                 lbl.show()
@@ -255,8 +256,8 @@ class Window(QWidget):
                 # self._set_label_value(self.ui.hang1_cal, round(_data,3))
                 # self._set_label_value(self.ui.hang2_cal, round(_data,3))
 
-        except Exception as e:
-            print(e)
+        except Exception:
+            logger.exception("实时数据刷新失败")
 
 
     def update_cal_data(self, **payload) -> None:

@@ -5,6 +5,7 @@ import inspect
 import json
 import logging
 import threading
+import traceback
 from collections import deque
 from datetime import datetime
 from pathlib import Path
@@ -243,7 +244,15 @@ class Workflow:
             return self.state
         except Exception as exc:
             self.state = WorkflowState.ERROR
-            self._append_workflow_log("evt_wf_error", error=str(exc))
+            logger.exception(
+                "workflow failed: id=%s name=%s node=%s",
+                self.id,
+                self.name,
+                self.cur_node.node_id if self.cur_node else None,
+            )
+            self._append_workflow_log(
+                "evt_wf_error", error=str(exc), traceback=traceback.format_exc()
+            )
             return self.state
         finally:
             self._log_active = False
@@ -261,29 +270,6 @@ class Workflow:
             confirmed = await wait_for_confirmation(node, self)
             if not confirmed:
                 raise NodeStoppedError("workflow stopped")
-
-    def dump_log(self, *, pretty: bool = True) -> str:
-        payload = {
-            "workflow": {
-                "流程ID": self.id,
-                "流程名称": self.name,
-                "创建时间": self.ctime,
-                "最终状态": self.state.value,
-                "最终节点": self.cur_node.node_id if self.cur_node else None,
-            },
-            "data": self.data,
-            "logs": self.logs,
-        }
-        return json.dumps(payload, ensure_ascii=False, indent=2 if pretty else None)
-
-    def export_log(self, output_dir: str | Path | None = None) -> Path:
-        directory = Path(output_dir or self.config_path.parent if self.config_path else Path.cwd()).resolve()
-        directory.mkdir(parents=True, exist_ok=True)
-        date_part = datetime.now().strftime("%Y-%m%d")
-        filename = f"{date_part}-{self.id}.log"
-        path = directory / filename
-        path.write_text(self.dump_log(pretty=True), encoding="utf-8")
-        return path
 
     def _append_workflow_log(self, event_name: str, **extra: Any) -> None:
         entry = {
@@ -606,7 +592,7 @@ async def show_result_dialog(node: Node, workflow: "Workflow", result_data: list
             if inspect.isawaitable(response):
                 response = await response
         else:
-            print(f"[{node.node_id}] result dialog not available, auto-confirm")
+            logger.warning("[%s] result dialog not available, auto-confirm", node.node_id)
             response = True
 
         workflow.check_stopped()

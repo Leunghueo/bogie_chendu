@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import inspect
 import json
+import sys
+import traceback
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
@@ -49,6 +51,7 @@ class Node:
     etime: str | None = None
     result: Any = None
     error: str | None = None
+    traceback_text: str | None = None
     node_logs: list[dict[str, Any]] = field(default_factory=list)
 
     @classmethod
@@ -81,6 +84,7 @@ class Node:
         self.etime = None
         self.result = None
         self.error = None
+        self.traceback_text = None
         self.node_logs = []
 
     def begin(self, workflow: "Workflow") -> None:
@@ -89,6 +93,7 @@ class Node:
         self.etime = None
         self.result = None
         self.error = None
+        self.traceback_text = None
         self.node_logs = []
         workflow.events.emit("evt_node_begin", workflow=workflow, node=self)
         # self._append_log("begin")
@@ -115,6 +120,11 @@ class Node:
         self.state = WorkflowState.ERROR
         self.etime = utc_now()
         self.error = str(exc)
+        # 堆栈随节点条目一起落库, 供事后按文件/行号定位故障来源;
+        # 不在异常上下文中被调用时 (极少数) 保持 None.
+        self.traceback_text = (
+            traceback.format_exc() if sys.exc_info()[0] is not None else None
+        )
         self._append_log("error")
         workflow.events.emit("evt_node_error", workflow=workflow, node=self, error=exc)
 
@@ -135,18 +145,19 @@ class Node:
         workflow.check_stopped()
 
     def _append_log(self, stage: str) -> None:
-        self.node_logs.append(
-            {
-                "消息源": "节点",
-                "消息阶段": stage,
-                "节点": f"{self.node_name}({self.node_id})",
-                "类型": self.node_type,
-                "状态": self.state.value,
-                "结果": self.result,
-                "错误": self.error,
-                "执行时间": self.stime,
-                "完成时间": self.etime,
-            }
-        )
+        entry = {
+            "消息源": "节点",
+            "消息阶段": stage,
+            "节点": f"{self.node_name}({self.node_id})",
+            "类型": self.node_type,
+            "状态": self.state.value,
+            "结果": self.result,
+            "错误": self.error,
+            "执行时间": self.stime,
+            "完成时间": self.etime,
+        }
+        if stage == "error" and self.traceback_text:
+            entry["堆栈"] = self.traceback_text
+        self.node_logs.append(entry)
 
 from . import actor as _actor  # noqa: E402,F401

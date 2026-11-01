@@ -348,7 +348,7 @@ class CANTable:
 
     def _poll_loop(self) -> None:
         interval = self.poll_interval_ms / 1000.0
-        print(f"can interval: {interval}")
+        logger.info("can interval: %s", interval)
         while not self._stop_event.is_set():
             started_at = time.time()
             self.poll_once()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import configparser
+import logging
 import sys
 from pathlib import Path
 from typing import Any
@@ -89,8 +90,7 @@ report_template = BASE_DIR / config.get("report", "template")
 report_path = BASE_DIR / config.get("report", "path")
 theme = config.get("theme","style")
 size = (int(config.get("size","w")), int(config.get("size","h")))
-# 在 _runtime.py 中添加
-print(f"Runtime size: {size}")
+logging.getLogger(__name__).info("Runtime size: %s", size)
 
 bed_data = None
 with open(bed_config_path, "r", encoding="utf-8") as f:

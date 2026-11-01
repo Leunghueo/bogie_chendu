@@ -470,7 +470,7 @@ class VSPTable:
 
     def _poll_loop(self) -> None:
         interval = self.poll_interval_ms / 1000.0
-        print(f"vsp interval: {interval}")
+        logger.info("vsp interval: %s", interval)
         while not self._stop_event.is_set():
             started_at = time.time()
             self.poll_once()
