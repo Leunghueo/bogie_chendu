@@ -324,6 +324,48 @@ class PdfReport:
             self.set_cell(cell_ref, value)
         return self
 
+    def add_image_sheet(
+        self,
+        image_path: str | Path,
+        sheet_title: str,
+    ) -> "PdfReport":
+        """
+        把一张图片放到单独的新工作表 (锚点 A1), 导出 PDF 时成为独立一页.
+
+        用于报告正文之外的整页图 (如气压保压曲线): 页面设为 A4 横向并
+        适页缩放, 图片的像素尺寸即其在表中的尺寸, 转换时自动缩放到整页.
+        同名工作表已存在时先删除重建 (load_template 每次都是新工作簿,
+        正常不会重名).
+
+        Args:
+            image_path: 图片文件路径 (png/jpg)
+            sheet_title: 新工作表名, 也是 PDF 中该页的来源表名
+
+        Returns:
+            self
+        """
+        if self._wb is None:
+            raise RuntimeError("请先调用 load_template()")
+
+        if sheet_title in self._wb.sheetnames:
+            del self._wb[sheet_title]
+        ws = self._wb.create_sheet(title=sheet_title)
+
+        img = XlsxImage(str(image_path))
+        ws.add_image(img, "A1")
+
+        ws.page_setup.orientation = "landscape"
+        ws.page_setup.paperSize = ws.PAPERSIZE_A4
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 1
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.page_margins.left = 0.25
+        ws.page_margins.right = 0.25
+        ws.page_margins.top = 0.4
+        ws.page_margins.bottom = 0.4
+        logger.info(f"已添加图片页: {sheet_title} <- {image_path}")
+        return self
+
     def fill_from_workbook(self, source_wb) -> "PdfReport":
         """
         从另一个工作簿填充数据到当前模板

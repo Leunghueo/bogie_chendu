@@ -4,6 +4,7 @@ import copy
 import json
 import logging
 import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -78,6 +79,93 @@ def _job_air_curves(job: dict[str, Any] | None) -> dict[str, Any]:
     """作业的空簧气压曲线 = air_curve 字段; 无曲线时返回 {}."""
     curves = (job or {}).get("air_curve")
     return curves if isinstance(curves, dict) else {}
+
+
+# 保压曲线两条线的打印配色 (实时图的黄线在白底上不可见, 导出改用深蓝/深红)
+_AIR_CURVE_STYLE = (("空簧气压1", "#1d4ed8"), ("空簧气压2", "#dc2626"))
+
+
+def _clean_curve_values(raw: Any) -> list[float]:
+    """曲线数组清洗: 只保留可转 float 的元素, 非数组返回 []."""
+    if not isinstance(raw, (list, tuple)):
+        return []
+    values: list[float] = []
+    for item in raw:
+        try:
+            values.append(float(item))
+        except (TypeError, ValueError):
+            continue
+    return values
+
+
+def _render_air_curve_png(job: dict[str, Any] | None) -> Path | None:
+    """把作业的空簧保压曲线渲染成打印风格 PNG (白底), 供报告曲线页使用.
+
+    数据即 air_curve 专列 {空簧气压1: [...], 空簧气压2: [...]}, 数组下标
+    为秒 (与 EMIS 编码口径一致), 横轴换算为分钟, 纵轴 kPa.
+    无有效曲线 (少于 2 点)、pyqtgraph 不可用或渲染异常时返回 None,
+    调用方据此跳过曲线页, 不影响报告导出.
+    """
+    curves = _job_air_curves(job)
+    series: list[tuple[str, list[float], str]] = []
+    for key, color in _AIR_CURVE_STYLE:
+        values = _clean_curve_values(curves.get(key))
+        if len(values) >= 2:
+            series.append((key, values, color))
+    if not series:
+        return None
+
+    try:
+        import pyqtgraph as pg
+        from pyqtgraph.exporters import ImageExporter
+    except Exception:
+        logger.warning("pyqtgraph 不可用, 跳过气压曲线页", exc_info=True)
+        return None
+
+    plot_widget = pg.PlotWidget(background="white")
+    try:
+        plot_widget.resize(1400, 800)
+        plot = plot_widget.getPlotItem()
+        title = "空气保压曲线"
+        job_name = str((job or {}).get("name") or "").strip()
+        if job_name:
+            title = f"{title} - {job_name}"
+        plot.setTitle(title, color="#111827", size="16pt")
+        plot.setLabel("left", "空气压力", units="kPa", color="#111827")
+        plot.setLabel("bottom", "保压时间", units="min", color="#111827")
+        plot.showGrid(x=True, y=True, alpha=0.3)
+        for axis_name in ("left", "bottom"):
+            axis = plot.getAxis(axis_name)
+            axis.setPen("#374151")
+            axis.setTextPen("#111827")
+        plot.addLegend(labelTextColor="#111827")
+        for key, values, color in series:
+            xs = [index / 60.0 for index in range(len(values))]
+            plot.plot(xs, values, pen=pg.mkPen(color, width=2.5), name=key)
+        all_values = [value for _, values, _ in series for value in values]
+        low, high = min(all_values), max(all_values)
+        pad = max(10.0, (high - low) * 0.15)
+        plot.setYRange(max(0.0, low - pad), high + pad, padding=0)
+        max_minutes = max(len(values) for _, values, _ in series) / 60.0
+        plot.setXRange(0, max(1.0, max_minutes), padding=0)
+
+        from PySide6.QtWidgets import QApplication
+
+        app = QApplication.instance()
+        if app is not None:
+            app.processEvents()
+        fd, tmp_name = tempfile.mkstemp(prefix="air_curve_", suffix=".png")
+        os.close(fd)
+        exporter = ImageExporter(plot)
+        exporter.parameters()["width"] = 1754
+        exporter.export(tmp_name)
+        return Path(tmp_name)
+    except Exception:
+        logger.warning("气压曲线渲染失败, 跳过曲线页", exc_info=True)
+        return None
+    finally:
+        plot_widget.close()
+        plot_widget.deleteLater()
 
 
 def _decimal_digits(item: dict[str, Any], default: int = 2) -> int:
@@ -458,13 +546,24 @@ class Window(QWidget):
         pdf_handler = self.runtime["pdf_report"]
         pdf_handler.load_template()
         pdf_handler.set_cells(maps)
+        # 空簧保压曲线单独成页 (有曲线数据时才加; 失败不阻断报告导出)
+        chart_png = _render_air_curve_png(job)
+        if chart_png is not None:
+            try:
+                pdf_handler.add_image_sheet(chart_png, "气压曲线")
+            except Exception:
+                logger.warning("添加气压曲线页失败, 仅导出数据报告", exc_info=True)
         created = str(job.get("created_at") or "")
         try:
             date_part = datetime.strptime(created, "%Y-%m-%d %H:%M:%S").strftime("%Y%m%d-%H%M%S")
         except ValueError:
             date_part = "unknown-time"
         output_name = f"{date_part}_{str(job.get('id') or '')[:8]}.pdf"
-        return Path(pdf_handler.export_pdf(output_name))
+        try:
+            return Path(pdf_handler.export_pdf(output_name))
+        finally:
+            if chart_png is not None:
+                chart_png.unlink(missing_ok=True)
 
     def _on_export(self) -> None:
         """导出报告: 将选中作业的 summary 数据填充 PDF 模板, 导出到 report.path"""
