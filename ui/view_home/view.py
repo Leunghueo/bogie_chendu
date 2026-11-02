@@ -105,8 +105,8 @@ class StatusDashboard(QFrame):
 
     # 防沉降气缸点动按钮: (显示标题, plc 点位名)
     _PT_BUTTONS: list[tuple[str, str]] = [
-        ("防沉开", "防沉降气缸伸出"),
-        ("防沉关", "防沉降气缸收回"),
+        ("防沉伸", "防沉降气缸收回"),
+        ("防沉收", "防沉降气缸伸出"),
     ]
     #: True = 点动脉冲(置 True 后 2 秒自动写 False); False = 点一下就一直保持
     _PT_BUTTON_RESET_DELAY = True
@@ -1712,9 +1712,6 @@ class Window(QWidget):
         self.position_combo.currentTextChanged.connect(self._reload_flow_options)
         form.addRow("位号:", self.position_combo)
 
-        self.flow_combo = QComboBox(meta_card)
-        form.addRow("流程:", self.flow_combo)
-
         self.car_no_edit = QLineEdit(meta_card)
         self.car_no_edit.setPlaceholderText("请输入车号")
         form.addRow("车号:", self.car_no_edit)
@@ -1722,6 +1719,9 @@ class Window(QWidget):
         self.axle_no_edit = QLineEdit(meta_card)
         self.axle_no_edit.setPlaceholderText("请输入编号")
         form.addRow("编号:", self.axle_no_edit)
+
+        self.flow_combo = QComboBox(meta_card)
+        form.addRow("流程:", self.flow_combo)
 
         meta_layout.addLayout(form)
         layout.addWidget(meta_card)
