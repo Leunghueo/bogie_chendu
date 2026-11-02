@@ -105,8 +105,8 @@ class StatusDashboard(QFrame):
 
     # 防沉降气缸点动按钮: (显示标题, plc 点位名)
     _PT_BUTTONS: list[tuple[str, str]] = [
-        ("防沉伸", "防沉降气缸收回"),
-        ("防沉收", "防沉降气缸伸出"),
+        ("防沉开", "防沉降气缸伸出"),
+        ("防沉关", "防沉降气缸收回"),
     ]
     #: True = 点动脉冲(置 True 后 2 秒自动写 False); False = 点一下就一直保持
     _PT_BUTTON_RESET_DELAY = True

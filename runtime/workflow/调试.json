@@ -153,7 +153,7 @@
       "meta": {},
       "args": {
         "delay": 0,
-        "confirm": false,
+        "confirm": true,
         "info": "",
         "algo": "plot_air",
         "data": {
@@ -189,13 +189,13 @@
     },
     "ed15715d": {
       "node_id": "ed15715d",
-      "node_name": "安全保护",
+      "node_name": "导轨高差保护",
       "type": "sys",
       "desc": "上位机指令,根据args的algo区分",
       "meta": {},
       "args": {
         "delay": 0,
-        "confirm": true,
+        "confirm": false,
         "info": "",
         "algo": "guard",
         "data": {
@@ -206,7 +206,7 @@
       "next": [
         "f949cfd5"
       ],
-      "gnode": "gnode_701"
+      "gnode": "gnode_702"
     },
     "f949cfd5": {
       "node_id": "f949cfd5",
@@ -284,68 +284,44 @@
         "8a04f3e1",
         "bf2c250a",
         "326f7d41",
-        "ed15715d",
-        "0a9d9363",
-        "end",
-        "d46c5c1b"
+        "d46c5c1b",
+        "61dda663",
+        "caa30b00"
       ],
       "require_node": "",
       "gnode": "gnode_head"
     },
     "e654427e": {
       "node_id": "e654427e",
-      "node_name": "加载缸测试",
+      "node_name": "1.加载缸测试",
       "type": "sys",
       "desc": "上位机指令,根据args的algo区分",
       "meta": {},
       "args": {
         "delay": 0,
-        "confirm": true,
+        "confirm": false,
         "info": "",
         "algo": "wait",
-        "data": {
-          "seconds": 1
-        }
+        "data": {}
       },
       "next": [
-        "b6961018"
+        "db5729d2"
       ],
       "require_node": "",
       "gnode": "gnode_301"
     },
-    "0a9d9363": {
-      "node_id": "0a9d9363",
-      "node_name": "导轨测试",
-      "type": "sys",
-      "desc": "上位机指令,根据args的algo区分",
-      "meta": {},
-      "args": {
-        "delay": 0,
-        "confirm": true,
-        "info": "",
-        "algo": "wait",
-        "data": {
-          "seconds": 1
-        }
-      },
-      "next": [],
-      "require_node": "",
-      "gnode": "gnode_201"
-    },
     "8a04f3e1": {
       "node_id": "8a04f3e1",
-      "node_name": "力测试",
+      "node_name": "2.力测试",
       "type": "sys",
       "desc": "上位机指令,根据args的algo区分",
       "meta": {},
       "args": {
         "delay": 0,
-        "confirm": true,
+        "confirm": false,
         "info": "",
         "algo": "wait",
-        "data": {
-          "seconds": 1
-        }
+        "data": {}
       },
       "next": [
         "2781a32a"
@@ -355,18 +331,16 @@
     },
     "bf2c250a": {
       "node_id": "bf2c250a",
-      "node_name": "算法测试",
+      "node_name": "3.算法测试",
       "type": "sys",
       "desc": "上位机指令,根据args的algo区分",
       "meta": {},
       "args": {
         "delay": 0,
-        "confirm": true,
+        "confirm": false,
         "info": "",
         "algo": "wait",
-        "data": {
-          "seconds": 1
-        }
+        "data": {}
       },
       "next": [
         "495015f8"
@@ -376,18 +350,16 @@
     },
     "326f7d41": {
       "node_id": "326f7d41",
-      "node_name": "ALGO测试1",
+      "node_name": "4.空簧测试",
       "type": "sys",
       "desc": "上位机指令,根据args的algo区分",
       "meta": {},
       "args": {
         "delay": 0,
-        "confirm": true,
+        "confirm": false,
         "info": "",
         "algo": "wait",
-        "data": {
-          "seconds": 1
-        }
+        "data": {}
       },
       "next": [
         "ac149162"
@@ -426,11 +398,11 @@
         "actlist": [
           {
             "pt_name": "设定1位加载头横向移动目标位置",
-            "value": 100
+            "value": "TEMP@压头DX1"
           },
           {
             "pt_name": "设定2位加载头横向移动目标位置",
-            "value": 100
+            "value": "TEMP@压头DX2"
           },
           {
             "pt_name": "设定加载头1快进垂向位移",
@@ -482,6 +454,9 @@
             "pt_name": "调整加载头横向移动启动信号",
             "value": true
           }
+        ],
+        "done_list": [
+          "加载头横向移动@完成=true"
         ]
       },
       "next": [
@@ -508,7 +483,7 @@
         ]
       },
       "next": [
-        "ee9b5b39"
+        "8ed4f71a"
       ],
       "require_node": "",
       "gnode": ""
@@ -528,6 +503,9 @@
             "pt_name": "快进加载装置",
             "value": true
           }
+        ],
+        "done_list": [
+          "快进加载装置@完成=true"
         ]
       },
       "next": [
@@ -559,18 +537,16 @@
     },
     "d46c5c1b": {
       "node_id": "d46c5c1b",
-      "node_name": "ALGO测试2",
+      "node_name": "5.差压测试",
       "type": "sys",
       "desc": "上位机指令,根据args的algo区分",
       "meta": {},
       "args": {
         "delay": 0,
-        "confirm": true,
+        "confirm": false,
         "info": "",
         "algo": "wait",
-        "data": {
-          "seconds": 1
-        }
+        "data": {}
       },
       "next": [
         "f61ac794"
@@ -658,7 +634,7 @@
     },
     "57e4f995": {
       "node_id": "57e4f995",
-      "node_name": "空簧保压完成",
+      "node_name": "差压1>2完成",
       "type": "sys",
       "desc": "上位机指令,根据args的algo区分",
       "meta": {},
@@ -825,13 +801,185 @@
       ],
       "require_node": "",
       "gnode": ""
+    },
+    "8ed4f71a": {
+      "node_id": "8ed4f71a",
+      "node_name": "加载缸水平位移清零",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "info": "",
+        "actlist": [
+          {
+            "pt_name": "设定1位加载头横向移动目标位置",
+            "value": 0
+          },
+          {
+            "pt_name": "设定2位加载头横向移动目标位置",
+            "value": 0
+          }
+        ]
+      },
+      "next": [
+        "ee9b5b39"
+      ],
+      "require_node": "",
+      "gnode": ""
+    },
+    "f3cad02a": {
+      "node_id": "f3cad02a",
+      "node_name": "快退",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 2,
+        "confirm": true,
+        "info": "",
+        "actlist": [
+          {
+            "pt_name": "快退加载装置",
+            "value": true
+          }
+        ],
+        "done_list": [
+          "快退加载装置@完成=true"
+        ]
+      },
+      "next": [
+        "0ba638cb"
+      ],
+      "require_node": "",
+      "gnode": ""
+    },
+    "d6737281": {
+      "node_id": "d6737281",
+      "node_name": "设定压头位置",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "actlist": [
+          {
+            "pt_name": "设定1位加载头横向移动目标位置",
+            "value": 0
+          },
+          {
+            "pt_name": "设定2位加载头横向移动目标位置",
+            "value": 0
+          },
+          {
+            "pt_name": "设定加载头1快进垂向位移",
+            "value": 0
+          },
+          {
+            "pt_name": "设定加载头2快进垂向位移",
+            "value": 0
+          }
+        ]
+      },
+      "next": [
+        "f3cad02a"
+      ],
+      "require_node": "",
+      "gnode": ""
+    },
+    "61dda663": {
+      "node_id": "61dda663",
+      "node_name": "6.保护测试",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "wait",
+        "data": {}
+      },
+      "next": [
+        "ed15715d"
+      ],
+      "require_node": "",
+      "gnode": "gnode_701"
+    },
+    "caa30b00": {
+      "node_id": "caa30b00",
+      "node_name": "7.收尾",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "wait",
+        "data": {}
+      },
+      "next": [
+        "d6737281"
+      ],
+      "require_node": "",
+      "gnode": "gnode_801"
+    },
+    "0ba638cb": {
+      "node_id": "0ba638cb",
+      "node_name": "升导轨",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 2,
+        "confirm": true,
+        "info": "",
+        "actlist": [
+          {
+            "pt_name": "升起转向架",
+            "value": true
+          }
+        ],
+        "done_list": [
+          "升起转向架@完成=true"
+        ]
+      },
+      "next": [
+        "end"
+      ],
+      "require_node": "",
+      "gnode": ""
+    },
+    "db5729d2": {
+      "node_id": "db5729d2",
+      "node_name": "PLC初始复位",
+      "type": "sys",
+      "desc": "根据配置初始化试验参数",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "clear_plc",
+        "data": {},
+        "gnode": ""
+      },
+      "next": [
+        "b6961018"
+      ],
+      "require_node": "",
+      "gnode": ""
     }
   },
   "ui": {
     "nodes": {
       "84384357": {
-        "x": 1681.1363636363635,
-        "y": 1112.6363636363635
+        "x": 1680,
+        "y": 1120
       },
       "head": {
         "x": 1372,
@@ -839,7 +987,7 @@
       },
       "end": {
         "x": 2856,
-        "y": 196
+        "y": 728
       },
       "23b00423": {
         "x": 1372,
@@ -854,36 +1002,36 @@
         "y": 644
       },
       "9fb97883": {
-        "x": 1681.1363636363635,
-        "y": 972.6363636363636
+        "x": 1680,
+        "y": 980
       },
       "f3e7968d": {
-        "x": 1681.1363636363635,
-        "y": 1504.6363636363635
+        "x": 1680,
+        "y": 1540
       },
       "a3d0a15e": {
-        "x": 1681.1363636363635,
-        "y": 1364.6363636363635
+        "x": 1680,
+        "y": 1400
       },
       "1619b695": {
-        "x": 1681.1363636363635,
-        "y": 1252.6363636363635
+        "x": 1680,
+        "y": 1260
       },
       "ed15715d": {
-        "x": 2632,
-        "y": 280
+        "x": 2604,
+        "y": 448
       },
       "f949cfd5": {
-        "x": 2632,
-        "y": 476
+        "x": 2604,
+        "y": 588
       },
       "44fd187c": {
-        "x": 2632,
-        "y": 616
+        "x": 2604,
+        "y": 700
       },
       "75a8edab": {
-        "x": 2632,
-        "y": 784
+        "x": 2604,
+        "y": 840
       },
       "0474a84d": {
         "x": 1372,
@@ -891,11 +1039,7 @@
       },
       "e654427e": {
         "x": 868,
-        "y": 364
-      },
-      "0a9d9363": {
-        "x": 616,
-        "y": 280
+        "y": 362.8636363636364
       },
       "8a04f3e1": {
         "x": 1120,
@@ -914,86 +1058,114 @@
         "y": 644
       },
       "7e4fd1a5": {
-        "x": 639.1538461538462,
-        "y": 723.2526866515836
+        "x": 868,
+        "y": 783.375
       },
       "b6961018": {
         "x": 868,
-        "y": 504
+        "y": 502.8636363636364
       },
       "a5cf2b6e": {
         "x": 868,
-        "y": 812.78125
+        "y": 951.0384615384615
       },
       "b5dcaec5": {
         "x": 868,
-        "y": 980
+        "y": 1120
       },
       "ee9b5b39": {
         "x": 868,
-        "y": 1148
+        "y": 1400
       },
       "398ceaa6": {
         "x": 868,
-        "y": 1288
+        "y": 1568
       },
       "d46c5c1b": {
-        "x": 2352,
-        "y": 364
+        "x": 2156,
+        "y": 392
       },
       "f61ac794": {
-        "x": 2352,
-        "y": 504
+        "x": 2156,
+        "y": 532
       },
       "44f75265": {
-        "x": 2355.125,
-        "y": 1193.2500000000002
+        "x": 2156,
+        "y": 1148
       },
       "a84703e7": {
-        "x": 2355.125,
-        "y": 1053.2500000000002
+        "x": 2156,
+        "y": 1008
       },
       "642a829c": {
-        "x": 2355.125,
-        "y": 1669.2500000000002
+        "x": 2156,
+        "y": 1568
       },
       "57e4f995": {
-        "x": 2355.125,
-        "y": 1501.2500000000002
+        "x": 2156,
+        "y": 1428
       },
       "aaa9e8b5": {
-        "x": 2355.125,
-        "y": 1361.2500000000002
+        "x": 2156,
+        "y": 1288
       },
       "c8a736bb": {
-        "x": 1914.0822510822513,
-        "y": 739.8403679653679
+        "x": 1904,
+        "y": 756
       },
       "f47b3738": {
-        "x": 2203.5505050505053,
-        "y": 689.4772727272729
+        "x": 2324,
+        "y": 700
       },
       "3ed12ebb": {
-        "x": 1913.5703463203463,
-        "y": 855.9951298701299
+        "x": 1904,
+        "y": 868
       },
       "639a8400": {
-        "x": 2203.317141192141,
-        "y": 808.2419247419248
+        "x": 2324,
+        "y": 840
       },
       "2781a32a": {
-        "x": 1120.235119047619,
-        "y": 624.7337662337662
+        "x": 1120,
+        "y": 616
       },
       "5bd9518b": {
-        "x": 641.7352941176471,
-        "y": 568.9336821266968
+        "x": 868,
+        "y": 644
+      },
+      "8ed4f71a": {
+        "x": 868,
+        "y": 1260
+      },
+      "f3cad02a": {
+        "x": 2856,
+        "y": 476
+      },
+      "d6737281": {
+        "x": 2856,
+        "y": 336
+      },
+      "61dda663": {
+        "x": 2604,
+        "y": 308
+      },
+      "caa30b00": {
+        "x": 2856,
+        "y": 196
+      },
+      "0ba638cb": {
+        "x": 2856,
+        "y": 588
+      },
+      "db5729d2": {
+        "x": 592.7272727272726,
+        "y": 478.6818181818182
       }
     },
     "viewport": {
-      "x": -471.73513974622597,
-      "y": -443.2029267093276,
-      "zoom": 1.04
+      "x": -292.8480246595914,
+      "y": -567.7625862270484,
+      "zoom": 0.72
     }
   }
 }
