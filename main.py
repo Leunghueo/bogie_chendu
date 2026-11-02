@@ -64,7 +64,11 @@ def _load_runtime() -> dict[str, object]:
         logger.info("PLC 未启用 (app.ini [plc] enable = false)，不启动 PLC 轮询")
 
     if vsp_enabled:
-        vsp_table = load_vsp(str(_rt["paths"]["vsp_config"]),sim=sim)
+        vsp_table = load_vsp(
+            str(_rt["paths"]["vsp_config"]),
+            sim=sim,
+            poll_groups=_rt["config"].getint("vsp", "poll_groups", fallback=4),
+        )
         vsp_table.broker = broker
         vsp_table.start()
     else:

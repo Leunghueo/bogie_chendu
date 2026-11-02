@@ -282,7 +282,16 @@ class VSPTable:
     #: sim 模式下所有点位的统一测试地址（见 app.ini [sim]）
     SIM_ENDPOINT = "localhost@10000"
 
-    def __init__(self, config_path: str | Path, sim: bool = False) -> None:
+    #: vsp_poll 事件的最小发布间隔（秒）：分组并行后各组完成时刻错开，
+    #: 聚合事件限流，避免订阅方（页脚状态/点位页）被高频刷新淹没
+    _PUBLISH_MIN_INTERVAL = 0.2
+
+    def __init__(
+        self,
+        config_path: str | Path,
+        sim: bool = False,
+        poll_groups: int = 4,
+    ) -> None:
         config_file = Path(config_path).resolve()
         data = json.loads(config_file.read_text(encoding="utf-8"))
         config_section = data.get("config") or {}
@@ -292,6 +301,10 @@ class VSPTable:
         self.poll_interval_ms = int(config_section.get("poll_interval_ms", 500))
         self.timeout_ms = int(config_section.get("timeout_ms", 300))
         self.recv_bytes = int(config_section.get("recv_bytes", 4096))
+        #: 轮询分组数（app.ini [vsp] poll_groups）：点位按服务器分组并行采集，
+        #: 同一台串口服务器的点位尽量同组串行，把对单台服务器的并发连接
+        #: 压到最少；1 = 退化为单线程顺序轮询（旧行为）
+        self.poll_groups = max(1, int(poll_groups))
         self.points: dict[str, VSPPoint] = {}
         self.broker = None
         self.alive = False
@@ -299,7 +312,8 @@ class VSPTable:
         self.last_error: str = ""
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
-        self._thread: threading.Thread | None = None
+        self._threads: list[threading.Thread] = []
+        self._last_publish_at = 0.0
         self.sim = bool(sim)
 
         for name, point_data in raw_points.items():
@@ -326,24 +340,45 @@ class VSPTable:
             )
             self.points[name] = point
 
-    def start(self) -> threading.Thread:
+    def start(self) -> list[threading.Thread]:
+        """启动分组轮询线程（每组一个），返回线程列表。"""
         with self._lock:
-            if self._thread is not None and self._thread.is_alive():
-                return self._thread
+            if any(thread.is_alive() for thread in self._threads):
+                return self._threads
             self._stop_event.clear()
-            self._thread = threading.Thread(target=self._poll_loop, name="vsp-poller", daemon=True)
-            self._thread.start()
-            return self._thread
+            groups = self._build_groups()
+            self._threads = []
+            for index in range(len(groups)):
+                thread = threading.Thread(
+                    target=self._group_loop,
+                    args=(index,),
+                    name=f"vsp-poller-{index + 1}",
+                    daemon=True,
+                )
+                thread.start()
+                self._threads.append(thread)
+            logger.info(
+                "vsp polling started: groups=%d interval=%ss assignment=%s",
+                len(groups),
+                self.poll_interval_ms / 1000.0,
+                [[point.name for point in group] for group in groups],
+            )
+            return self._threads
 
     def stop(self, timeout: float | None = 2.0) -> None:
+        """停止全部轮询线程；timeout 为所有线程 join 的总预算（秒）。"""
         self._stop_event.set()
-        thread = self._thread
-        if thread is not None and thread.is_alive():
-            thread.join(timeout=timeout)
+        threads = list(self._threads)
+        if timeout is None:
+            for thread in threads:
+                thread.join()
+            return
+        deadline = time.time() + timeout
+        for thread in threads:
+            thread.join(timeout=max(0.0, deadline - time.time()))
 
     def is_running(self) -> bool:
-        thread = self._thread
-        return thread is not None and thread.is_alive()
+        return any(thread.is_alive() for thread in self._threads)
 
     def reload(self) -> None:
         """原地重载 VSP 配置：仅更新内部数据，不停止轮询线程，不替换实例。
@@ -468,19 +503,55 @@ class VSPTable:
             add=add if add is not None else config.add,
         )
 
-    def _poll_loop(self) -> None:
-        interval = self.poll_interval_ms / 1000.0
-        logger.info("vsp interval: %s", interval)
+    def _build_groups(self) -> list[list[VSPPoint]]:
+        """把点位分成 poll_groups 组（组间并行、组内串行）。
+
+        先按 (服务器 host, 协议族 parser, 配置顺序) 排序再连续切分：
+        同一台串口服务器的点位相邻、尽量落进同一组串行采集，于是单台
+        服务器同时承受的连接数 ≈ 它被分到的组数（远小于点数），组数
+        本身就是对单台服务器的并发上限；慢点/死点只拖住本组。
+        每轮由各组线程按当前点表重新计算，reload() 换点后自动跟随。
+        """
+        with self._lock:
+            points = list(self.points.values())
+        indexed = sorted(
+            enumerate(points),
+            key=lambda item: (
+                item[1].endpoint.host,
+                item[1].config.parser_name,
+                item[0],
+            ),
+        )
+        ordered = [point for _, point in indexed]
+        if not ordered:
+            return []
+        count = max(1, min(self.poll_groups, len(ordered)))
+        groups: list[list[VSPPoint]] = []
+        base, extra = divmod(len(ordered), count)
+        start = 0
+        for index in range(count):
+            size = base + (1 if index < extra else 0)
+            groups.append(ordered[start:start + size])
+            start += size
+        return groups
+
+    def _group_loop(self, index: int) -> None:
+        # 错峰启动：避免所有组在同一瞬间向串口服务器发起连接
+        if index > 0 and self._stop_event.wait(index * 0.05):
+            return
         while not self._stop_event.is_set():
             started_at = time.time()
-            self.poll_once()
+            interval = self.poll_interval_ms / 1000.0
+            groups = self._build_groups()
+            if index < len(groups) and groups[index]:
+                self._poll_points(groups[index])
             elapsed = time.time() - started_at
             self._stop_event.wait(max(0.0, interval - elapsed))
 
-    def poll_once(self) -> None:
-        any_success = False
-        last_error = ""
-        for point in self.points.values():
+    def _poll_points(self, points: list[VSPPoint]) -> None:
+        for point in points:
+            if self._stop_event.is_set():
+                break
             try:
                 parser_func = PARSERS[point.config.parser_name]
                 raw_value = TCPValueClient(
@@ -495,38 +566,64 @@ class VSPTable:
             except Exception as exc:
                 with self._lock:
                     point.mark_error(str(exc))
-                last_error = str(exc)
+                    self._refresh_status_locked()
                 continue
 
             with self._lock:
                 point.update(raw_value)
-                self.alive = True
-                self.last_error = ""
-            any_success = True
+                self._refresh_status_locked()
 
-        with self._lock:
-            self.alive = any_success and bool(self.points)
-            self.last_poll_at = time.time()
-            self.last_error = last_error
+        self._publish_poll_event()
 
+    def _refresh_status_locked(self) -> None:
+        """按各点当前状态重算表级 alive/last_error（调用方须持锁）。
+
+        last_error 取当前仍处于错误状态的第一个点的错误：某个点持续
+        失败时错误信息保持可见，不会被其他点的成功刷新冲掉；全部点
+        恢复后自动清空。与旧单线程“本轮最后一个失败点”口径等效。
+        """
+        self.last_poll_at = time.time()
+        self.alive = any(p.alive for p in self.points.values())
+        self.last_error = next(
+            (p.error for p in self.points.values() if p.error), ""
+        )
+
+    def _publish_poll_event(self) -> None:
         broker = self.broker
-        if broker is not None:
-            broker.publish(
-                topic = "vsp_poll",
-                alive=self.alive,
-                running=self.is_running(),
-                last_poll_at=self.last_poll_at,
-                error=self.last_error,
-            )
+        if broker is None:
+            return
+        now = time.time()
+        with self._lock:
+            if now - self._last_publish_at < self._PUBLISH_MIN_INTERVAL:
+                return
+            self._last_publish_at = now
+            payload = {
+                "alive": self.alive,
+                "running": self.is_running(),
+                "last_poll_at": self.last_poll_at,
+                "error": self.last_error,
+            }
+        broker.publish(topic="vsp_poll", **payload)
+
+    def poll_once(self) -> None:
+        """同步采集全部点位一次（手动/测试用；后台轮询走分组线程）。"""
+        with self._lock:
+            points = list(self.points.values())
+        self._poll_points(points)
 
 
-def load_vsp(config_path: str | Path, sim: bool = False) -> VSPTable:
+def load_vsp(
+    config_path: str | Path,
+    sim: bool = False,
+    poll_groups: int = 4,
+) -> VSPTable:
     """加载 VSP 点位表.
 
     sim=True 时所有点位的 port 临时替换为 localhost@10000（本地测试用，
     不写回配置文件）。对应 app.ini [sim] enable。
+    poll_groups 为轮询分组数，对应 app.ini [vsp] poll_groups。
     """
-    return VSPTable(config_path, sim=sim)
+    return VSPTable(config_path, sim=sim, poll_groups=poll_groups)
 
 @parser("head_x")
 def hex2dis(data: bytes) -> float:
