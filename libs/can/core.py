@@ -134,6 +134,39 @@ def read_sdo(bus: Any, node_id: int, index: int, subindex: int = 0, timeout: flo
     raise TimeoutError(f"SDO timeout for node {node_id}, object 0x{index:04X}:{subindex:02X}")
 
 
+class _SimBus:
+    """sim 模式下的假总线：按 (node, index, subindex) 返回固定的 SDO 应答。
+
+    只实现 read_sdo 需要的最小接口（send/recv/close），
+    应答帧与真实设备格式一致：0x43 = expedited 4 字节小端。
+    """
+
+    def __init__(self, responses: dict[tuple[int, int, int], int]) -> None:
+        self._responses = responses
+        self._pending: tuple[int, bytes] | None = None
+
+    def send(self, arbitration_id: int, data: bytes) -> None:
+        node = arbitration_id - 0x600
+        index = data[1] | (data[2] << 8)
+        subindex = data[3]
+        value = self._responses.get((node, index, subindex))
+        if value is None:
+            # 没注册的读按 abort 回（0x06090000 = 对象不存在）
+            head = bytes([0x80, data[1], data[2], data[3]])
+            payload = head + (0x06090000).to_bytes(4, "little")
+        else:
+            head = bytes([0x43, data[1], data[2], data[3]])
+            payload = head + (value & 0xFFFFFFFF).to_bytes(4, "little")
+        self._pending = (0x580 + node, payload)
+
+    def recv(self, timeout: float) -> tuple[int, bytes] | None:
+        pending, self._pending = self._pending, None
+        return pending
+
+    def close(self) -> None:
+        self._pending = None
+
+
 @dataclass(frozen=True)
 class CANPointConfig:
     name: str
@@ -334,13 +367,29 @@ class CANTable:
             except Exception:
                 pass
 
+    def _build_sim_responses(self) -> dict[tuple[int, int, int], int]:
+        """sim 模式：给每个配置的点位生成一个固定假数据（100-200 mm），启动后不再变化。
+
+        固定值由点位名字节和决定（与运行进程无关，每次启动结果相同）；
+        分辨率固定 1000 nm（=1 µm），原始值 = mm * 1000，报警固定 0。
+        """
+        responses: dict[tuple[int, int, int], int] = {}
+        for point in self.points.values():
+            cfg = point.config
+            position_mm = 100 + (sum(cfg.name.encode("utf-8")) % 101)
+            resolution_nm = 1000
+            raw = int(round(position_mm * 1_000_000 / resolution_nm))
+            responses[(cfg.node, cfg.idx_resolution, cfg.sidx_resolution)] = resolution_nm
+            responses[(cfg.node, cfg.idx_pos, cfg.sidx_pos)] = raw
+            responses[(cfg.node, cfg.idx_alarm, cfg.sidx_alarm)] = 0
+        return responses
+
     def _ensure_bus(self) -> Any:
         if self._bus is not None:
             return self._bus
         if self.sim:
-            # CAN 的 sim 模式尚未定义：不编造假数据，让轮询标记错误，
-            # 后续按真实 sim 方案（虚拟总线/回放）再补。
-            raise RuntimeError("CAN sim 模式未定义，无法打开虚拟总线")
+            self._bus = _SimBus(self._build_sim_responses())
+            return self._bus
         if self.channel is None:
             raise RuntimeError("can.json 里没有点位，无法确定总线")
         self._bus = self._bus_factory(self.channel)
