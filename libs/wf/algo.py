@@ -380,7 +380,7 @@ async def init_cal(node: "Node", workflow: "Workflow", data: Any) -> Any:
 
     
     head1_dx = (workflow.data["试验参数"]["压头1横向位移"]+h1_base) - _vsp.read("压头横向1")
-    head2_dx = (workflow.data["试验参数"]["压头2横向位移"]+h2_base) - _vsp.read("压头横向2")
+    head2_dx = (workflow.data["试验参数"]["压头2横向位置"]+h2_base) - _vsp.read("压头横向2")
 
     workflow.data["试验参数"]["TEMP@压头DX1"] =  -head1_dx  # SB正数往中间走
     workflow.data["试验参数"]["TEMP@压头DX2"] =  -head2_dx  # SB正数往中间走
@@ -435,14 +435,14 @@ async def cal_press_trail(node: "Node", workflow: "Workflow", data: Any) -> Any:
     _data = workflow.data["结果数据"]["1-3位轴距"]
     _d1 = plc.read("称重台X位移1")-base_pos["滑台位移1"]
     _d2 = plc.read("称重台X位移3")-base_pos["滑台位移3"]
-    _cal = bogie_spec["轴距"]+(_d1+_d2)
+    _cal = bogie_spec["轴距13"]+(_d1+_d2)
     workflow.data["结果数据"]["1-3位轴距"]["测量值"] = round(_cal, 2)
 
     # 24轴距
     _data = workflow.data["结果数据"]["2-4位轴距"]
     _d1 = plc.read("称重台X位移2")-base_pos["滑台位移2"]
     _d2 = plc.read("称重台X位移4")-base_pos["滑台位移4"]
-    _cal = bogie_spec["轴距"]+(_d1+_d2)
+    _cal = bogie_spec["轴距24"]+(_d1+_d2)
     workflow.data["结果数据"]["2-4位轴距"]["测量值"] = round(_cal, 2)
 
     # 回撤(数据修正): 由 runtime/fix 开关文件控制是否启用
