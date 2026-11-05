@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTreeWidget,
     QTreeWidgetItem,
+    QTreeWidgetItemIterator,
     QVBoxLayout,
     QWidget,
 )
@@ -53,6 +54,9 @@ class JsonEditorWidget(QWidget):
         self._data: dict | list | None = None
         self._modified = False
         self._rebuilding = False
+        #: 当前展开层级：深度 < 该值的容器节点展开，其余收起。
+        #: 1 = 只展开根（默认收到第一层，第一层键可见但不展开）
+        self._expand_level = 1
         self._build_ui()
         if source is None:
             source = {}
@@ -69,6 +73,14 @@ class JsonEditorWidget(QWidget):
         self.title_label = QLabel("JSON 对象", self)
         self.title_label.setObjectName("cardTitle")
         header.addWidget(self.title_label, 1)
+
+        self.expand_button = QPushButton("展开一层", self)
+        self.expand_button.clicked.connect(lambda: self._set_expand_level(self._expand_level + 1))
+        header.addWidget(self.expand_button)
+
+        self.collapse_button = QPushButton("收起一层", self)
+        self.collapse_button.clicked.connect(lambda: self._set_expand_level(self._expand_level - 1))
+        header.addWidget(self.collapse_button)
 
         self.reload_button = QPushButton("重载", self)
         self.reload_button.clicked.connect(self.reload_source)
@@ -96,6 +108,13 @@ class JsonEditorWidget(QWidget):
         self.tree.request_add_child.connect(self.add_child_item)
         self.tree.request_add_sibling.connect(self.add_sibling_item)
         self.tree.request_delete.connect(self.delete_current_item)
+        # 列宽自适应：展开/收起后内容变化，合并高频信号后统一重算列宽
+        self._fit_timer = QTimer(self)
+        self._fit_timer.setSingleShot(True)
+        self._fit_timer.setInterval(50)
+        self._fit_timer.timeout.connect(self._fit_columns)
+        self.tree.itemExpanded.connect(lambda *_: self._fit_timer.start())
+        self.tree.itemCollapsed.connect(lambda *_: self._fit_timer.start())
         layout.addWidget(self.tree, 1)
 
     @property
@@ -259,10 +278,51 @@ class JsonEditorWidget(QWidget):
         root.setText(0, self._root_title())
         root.setFlags((root.flags() | Qt.ItemIsEnabled | Qt.ItemIsSelectable) & ~Qt.ItemIsEditable)
         self.tree.addTopLevelItem(root)
-        self.tree.expandToDepth(1)
-        self.tree.resizeColumnToContents(0)
-        self.tree.resizeColumnToContents(2)
+        # 默认收到第一层：只展开根，第一层键可见但不展开（重载同样重置）
+        self._expand_level = 1
+        self._apply_expand_level()
+        self._fit_columns()
         self._rebuilding = False
+
+    @staticmethod
+    def _item_depth(item: QTreeWidgetItem) -> int:
+        depth = 0
+        parent = item.parent()
+        while parent is not None:
+            depth += 1
+            parent = parent.parent()
+        return depth
+
+    def _max_depth(self) -> int:
+        max_depth = 0
+        iterator = QTreeWidgetItemIterator(self.tree)
+        while iterator.value():
+            max_depth = max(max_depth, self._item_depth(iterator.value()))
+            iterator += 1
+        return max_depth
+
+    def _apply_expand_level(self) -> None:
+        """按当前层级绝对设置每个容器节点的展开状态（与历史状态无关）。"""
+        iterator = QTreeWidgetItemIterator(self.tree)
+        while iterator.value():
+            item = iterator.value()
+            if item.childCount():
+                item.setExpanded(self._item_depth(item) < self._expand_level)
+            iterator += 1
+        self._update_level_buttons()
+
+    def _set_expand_level(self, level: int) -> None:
+        self._expand_level = max(0, min(level, self._max_depth() + 1))
+        self._apply_expand_level()
+        self._fit_columns()
+
+    def _update_level_buttons(self) -> None:
+        self.collapse_button.setEnabled(self._expand_level > 0)
+        self.expand_button.setEnabled(self._expand_level < self._max_depth() + 1)
+
+    def _fit_columns(self) -> None:
+        for column in range(self.tree.columnCount()):
+            self.tree.resizeColumnToContents(column)
 
     def _build_item(self, key: str, value: Any) -> QTreeWidgetItem:
         if isinstance(value, dict):
