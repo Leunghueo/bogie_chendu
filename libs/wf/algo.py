@@ -375,15 +375,14 @@ async def init_cal(node: "Node", workflow: "Workflow", data: Any) -> Any:
     _vsp = get_runtime()["vsp"]
     _can = get_runtime()["can"]
     base_pos = bed_section("原点位置")
-    h1_base = base_pos.get("加载头零位1") # 绿箭头位置1
-    h2_base = base_pos.get("加载头零位2") # 绿箭头位置2
 
-    
-    head1_dx = (workflow.data["试验参数"]["压头1横向位移"]+h1_base) - _vsp.read("压头横向1")
-    head2_dx = (workflow.data["试验参数"]["压头2横向位置"]+h2_base) - _vsp.read("压头横向2")
 
-    workflow.data["试验参数"]["TEMP@压头DX1"] =  -head1_dx  # SB正数往中间走
-    workflow.data["试验参数"]["TEMP@压头DX2"] =  -head2_dx  # SB正数往中间走
+    half = workflow.data["试验参数"]["压头间距"] / 2
+    head1_dx = int(half - _vsp.read("压头横向1")) * -1  # SB正数往中间走
+    head2_dx = int(half - _vsp.read("压头横向2")) * -1  # SB正数往中间走
+
+    workflow.data["试验参数"]["TEMP@压头DX1"] =  head1_dx  
+    workflow.data["试验参数"]["TEMP@压头DX2"] =  head2_dx  
     
     return None
 
