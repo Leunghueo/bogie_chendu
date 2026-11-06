@@ -6,7 +6,7 @@ import logging
 
 from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget, QPushButton
+from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget, QPushButton, QMessageBox
 
 from _runtime import bed_section, get_runtime, reload_bed_data
 from ui.dialog_fit.view import Window as FitDialog
@@ -205,27 +205,14 @@ class Window(QWidget):
             ):
                 return
 
-            base_zj_13 = 0
-            base_zj_24 = 0
-            base_ncj_12 = 0
-            base_ncj_34 = 0
+            _base_size = bed_section("标定杆")
+            base_zj_13 = _base_size["轴距13"]
+            base_zj_24 = _base_size["轴距24"]
+            base_ncj_12 = _base_size["内测距12"]
+            base_ncj_34 = _base_size["内测距34"]
 
-            cur_flow_data = self.runtime.get("wf")
-            if not cur_flow_data:
-                base_pos = bed_section("标定杆")
-                base_zj_13 = base_pos["轴距13"]
-                base_zj_24 = base_pos["轴距24"]
-                base_ncj_12 = base_pos["内测距12"]
-                base_ncj_34 = base_pos["内测距34"]
-            else:
-                bogie_spec = cur_flow_data.data["转向架数据"]
-                base_zj_13 = bogie_spec["轴距13"]
-                base_zj_24 = bogie_spec["轴距24"]
-                base_ncj_12 = bogie_spec["内测距12"]
-                base_ncj_34 = bogie_spec["内测距34"]
-
-            _data13 = (bench_zj_values[0]) + (bench_zj_values[2]) + base_zj_13
-            _data24 = (bench_zj_values[1]) + (bench_zj_values[3]) + base_zj_24
+            _data13 = bench_zj_values[0] + bench_zj_values[2] + base_zj_13
+            _data24 = bench_zj_values[1] + bench_zj_values[3] + base_zj_24
             _data12 = bench_ncj_values[0] + bench_ncj_values[1] + base_ncj_12
             _data34 = bench_ncj_values[2] + bench_ncj_values[3] + base_ncj_34
 
@@ -300,5 +287,7 @@ class Window(QWidget):
             json.dump(data, f, ensure_ascii=False, indent=2)
 
         reload_bed_data()
+        
         logger.info("原点位置已更新并写入 %s", bed_config_path)
+        QMessageBox.information(self, "设定原点位置", "原点位置已更新并保存")
      

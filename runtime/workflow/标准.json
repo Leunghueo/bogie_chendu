@@ -44,6 +44,29 @@
         "2f5243e0"
       ]
     },
+    "84029225": {
+      "node_id": "84029225",
+      "node_name": "下降OFF",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 2,
+        "confirm": false,
+        "info": "",
+        "actlist": [
+          {
+            "pt_name": "快进加载装置",
+            "value": false
+          }
+        ]
+      },
+      "next": [
+        "39b9dd12"
+      ],
+      "require_node": "",
+      "gnode": ""
+    },
     "head": {
       "node_id": "head",
       "node_name": "试验开始",
@@ -56,7 +79,7 @@
       },
       "gnode": "",
       "next": [
-        "5e7133f5"
+        "ab8e46c3"
       ]
     },
     "end": {
@@ -144,61 +167,7 @@
       },
       "gnode": "",
       "next": [
-        "8a2ec009"
-      ]
-    },
-    "2c329ea8": {
-      "node_id": "2c329ea8",
-      "node_name": "设定快进位移",
-      "type": "plc_batch",
-      "desc": "可以执行并行的plc写入操作",
-      "meta": {},
-      "args": {
-        "delay": 0,
-        "confirm": false,
-        "actlist": [
-          {
-            "pt_name": "设定加载头1快进垂向位移",
-            "value": "压头快进位置"
-          },
-          {
-            "pt_name": "设定加载头2快进垂向位移",
-            "value": "压头快进位置"
-          }
-        ]
-      },
-      "gnode": "",
-      "next": [
-        "1040f727"
-      ]
-    },
-    "1040f727": {
-      "node_id": "1040f727",
-      "node_name": "加载头快进",
-      "type": "plc_batch",
-      "desc": "可以执行并行的plc写入操作",
-      "meta": {},
-      "args": {
-        "delay": 0,
-        "confirm": false,
-        "actlist": [
-          {
-            "pt_name": "快进加载装置",
-            "value": true
-          },
-          {
-            "pt_name": "快进信息确认",
-            "value": true
-          }
-        ],
-        "done_list": [
-          "快进加载装置@完成=true",
-          "快进信息@完成@完成=true"
-        ]
-      },
-      "gnode": "gnode_2",
-      "next": [
-        "f46b4646"
+        "15e43587"
       ]
     },
     "75f22153": {
@@ -548,53 +517,6 @@
         "9acf3fe4"
       ]
     },
-    "5e7133f5": {
-      "node_id": "5e7133f5",
-      "node_name": "参数初始化",
-      "type": "sys",
-      "desc": "根据配置初始化试验参数",
-      "meta": {},
-      "args": {
-        "delay": 0,
-        "confirm": false,
-        "info": "",
-        "algo": "init_cal",
-        "data": {}
-      },
-      "gnode": "",
-      "next": [
-        "ab8e46c3"
-      ]
-    },
-    "8a2ec009": {
-      "node_id": "8a2ec009",
-      "node_name": "降下转向架",
-      "type": "plc_batch",
-      "desc": "可以执行并行的plc写入操作",
-      "meta": {},
-      "args": {
-        "delay": 0,
-        "confirm": true,
-        "info": "请确认转向架位置是否正确!",
-        "actlist": [
-          {
-            "pt_name": "确认转向架中心",
-            "value": true
-          },
-          {
-            "pt_name": "降下转向架",
-            "value": true
-          }
-        ],
-        "done_list": [
-          "降下转向架@完成=true"
-        ]
-      },
-      "gnode": "gnode_1",
-      "next": [
-        "39b9dd12"
-      ]
-    },
     "27f3ccd3": {
       "node_id": "27f3ccd3",
       "node_name": "6.差压2>1",
@@ -612,30 +534,6 @@
       "gnode": "gnode_801",
       "next": [
         "98d355a9"
-      ]
-    },
-    "f46b4646": {
-      "node_id": "f46b4646",
-      "node_name": "压头贴合",
-      "type": "plc_batch",
-      "desc": "可以执行并行的plc写入操作",
-      "meta": {},
-      "args": {
-        "delay": 3,
-        "confirm": true,
-        "actlist": [
-          {
-            "pt_name": "力贴合加载",
-            "value": true
-          }
-        ],
-        "done_list": [
-          "力贴合加载@完成=true"
-        ]
-      },
-      "gnode": "gnode_3",
-      "next": [
-        "f6fe56a2"
       ]
     },
     "fd492ddd": {
@@ -1750,7 +1648,7 @@
         "data": {}
       },
       "next": [
-        "2c329ea8"
+        "76eb5f46"
       ],
       "gnode": ""
     },
@@ -2270,6 +2168,216 @@
         "f89816b6"
       ],
       "gnode": ""
+    },
+    "c0c7ed28": {
+      "node_id": "c0c7ed28",
+      "node_name": "设定压头位置",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "info": "",
+        "actlist": [
+          {
+            "pt_name": "设定1位加载头横向移动目标位置",
+            "value": "TEMP@压头DX1"
+          },
+          {
+            "pt_name": "设定2位加载头横向移动目标位置",
+            "value": "TEMP@压头DX2"
+          },
+          {
+            "pt_name": "设定加载头1快进垂向位移",
+            "value": "压头快进位置"
+          },
+          {
+            "pt_name": "设定加载头2快进垂向位移",
+            "value": "压头快进位置"
+          }
+        ]
+      },
+      "next": [
+        "966d6865"
+      ],
+      "require_node": "",
+      "gnode": ""
+    },
+    "15e43587": {
+      "node_id": "15e43587",
+      "node_name": "计算压头X",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "cal_head",
+        "data": {}
+      },
+      "next": [
+        "1b7b4d68"
+      ],
+      "require_node": "",
+      "gnode": ""
+    },
+    "966d6865": {
+      "node_id": "966d6865",
+      "node_name": "平移ON",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "info": "",
+        "actlist": [
+          {
+            "pt_name": "调整加载头横向移动启动信号",
+            "value": true
+          }
+        ],
+        "done_list": [
+          "加载头横向移动@完成=true"
+        ]
+      },
+      "next": [
+        "b341c091"
+      ],
+      "require_node": "",
+      "gnode": ""
+    },
+    "b341c091": {
+      "node_id": "b341c091",
+      "node_name": "平移OFF",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 2,
+        "confirm": false,
+        "info": "",
+        "actlist": [
+          {
+            "pt_name": "调整加载头横向移动启动信号",
+            "value": false
+          }
+        ]
+      },
+      "next": [
+        "71689f7b"
+      ],
+      "require_node": "",
+      "gnode": ""
+    },
+    "26dc3d2a": {
+      "node_id": "26dc3d2a",
+      "node_name": "下降ON",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 2,
+        "confirm": true,
+        "info": "",
+        "actlist": [
+          {
+            "pt_name": "快进加载装置",
+            "value": true
+          }
+        ],
+        "done_list": [
+          "快进加载装置@完成=true"
+        ]
+      },
+      "next": [
+        "84029225"
+      ],
+      "require_node": "",
+      "gnode": ""
+    },
+    "1b7b4d68": {
+      "node_id": "1b7b4d68",
+      "node_name": "降下转向架 Copy",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "info": "请确认转向架位置是否正确!",
+        "actlist": [
+          {
+            "pt_name": "确认转向架中心",
+            "value": true
+          },
+          {
+            "pt_name": "降下转向架",
+            "value": true
+          }
+        ],
+        "done_list": [
+          "降下转向架@完成=true"
+        ]
+      },
+      "next": [
+        "c0c7ed28"
+      ],
+      "require_node": "",
+      "gnode": ""
+    },
+    "71689f7b": {
+      "node_id": "71689f7b",
+      "node_name": "加载缸水平位移清零",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "actlist": [
+          {
+            "pt_name": "设定1位加载头横向移动目标位置",
+            "value": 0
+          },
+          {
+            "pt_name": "设定2位加载头横向移动目标位置",
+            "value": 0
+          }
+        ]
+      },
+      "next": [
+        "26dc3d2a"
+      ],
+      "require_node": "",
+      "gnode": ""
+    },
+    "76eb5f46": {
+      "node_id": "76eb5f46",
+      "node_name": "压头贴合",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 3,
+        "confirm": true,
+        "actlist": [
+          {
+            "pt_name": "力贴合加载",
+            "value": true
+          }
+        ],
+        "done_list": [
+          "力贴合加载@完成=true"
+        ]
+      },
+      "gnode": "",
+      "next": [
+        "f6fe56a2"
+      ]
     }
   },
   "ui": {
@@ -2281,6 +2389,10 @@
       "68328415": {
         "x": 2072,
         "y": 840
+      },
+      "84029225": {
+        "x": 224,
+        "y": 1708
       },
       "head": {
         "x": 224,
@@ -2296,22 +2408,14 @@
       },
       "6f5fa69d": {
         "x": 224,
-        "y": 560
+        "y": 388.15384615384613
       },
       "b85ec90e": {
         "x": 224,
-        "y": 700
-      },
-      "2c329ea8": {
-        "x": 224,
-        "y": 1148
-      },
-      "1040f727": {
-        "x": 224,
-        "y": 1288
+        "y": 532.625
       },
       "75f22153": {
-        "x": 924,
+        "x": 922.75,
         "y": 812
       },
       "d8ca9bae": {
@@ -2374,21 +2478,9 @@
         "x": 1204,
         "y": 700
       },
-      "5e7133f5": {
-        "x": 224,
-        "y": 140
-      },
-      "8a2ec009": {
-        "x": 224,
-        "y": 840
-      },
       "27f3ccd3": {
         "x": 2716,
         "y": 84
-      },
-      "f46b4646": {
-        "x": 224,
-        "y": 1484
       },
       "fd492ddd": {
         "x": 588,
@@ -2444,11 +2536,11 @@
       },
       "5937e485": {
         "x": 588,
-        "y": 392
+        "y": 393.04166666666663
       },
       "5b917d32": {
         "x": 224,
-        "y": 420
+        "y": 255.8461538461538
       },
       "ae3fd004": {
         "x": 1568,
@@ -2499,16 +2591,16 @@
         "y": 1512
       },
       "f6fe56a2": {
-        "x": 224,
-        "y": 1792
+        "x": 222.4375,
+        "y": 2227.2427884615386
       },
       "bc25e26a": {
         "x": 224,
-        "y": 1932
+        "y": 2352.4909502262444
       },
       "c67d83c4": {
         "x": 224,
-        "y": 2044
+        "y": 2478.4615384615386
       },
       "2e328bcb": {
         "x": 3276,
@@ -2588,7 +2680,7 @@
       },
       "39b9dd12": {
         "x": 224,
-        "y": 1008
+        "y": 1848
       },
       "bdc5125e": {
         "x": 2072,
@@ -2667,18 +2759,50 @@
         "y": 280
       },
       "ab8e46c3": {
-        "x": 224,
-        "y": 280
+        "x": 223.99999999999994,
+        "y": 126.53846153846155
       },
       "eaeceff0": {
         "x": 3500,
         "y": 224
+      },
+      "c0c7ed28": {
+        "x": 224,
+        "y": 952
+      },
+      "15e43587": {
+        "x": 224,
+        "y": 672
+      },
+      "966d6865": {
+        "x": 224,
+        "y": 1120
+      },
+      "b341c091": {
+        "x": 224,
+        "y": 1288
+      },
+      "26dc3d2a": {
+        "x": 224,
+        "y": 1568
+      },
+      "1b7b4d68": {
+        "x": 224,
+        "y": 812
+      },
+      "71689f7b": {
+        "x": 224,
+        "y": 1426.125
+      },
+      "76eb5f46": {
+        "x": 226.05069930069925,
+        "y": 2025.5010926573425
       }
     },
     "viewport": {
-      "x": -1895.165332686559,
-      "y": 66.391654672914,
-      "zoom": 0.72
+      "x": -71.99217181993151,
+      "y": -1958.6992965935879,
+      "zoom": 1.04
     }
   }
 }

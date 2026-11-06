@@ -325,13 +325,13 @@ async def autofit_x(node: "Node", workflow: "Workflow", data: Any) -> Any:
 # 计算初始自重--->试验参数
 @register_algo("init_weight")
 async def init_weight(node: "Node", workflow: "Workflow", data: Any) -> Any:
-    plc = get_runtime()["plc"]
+    _vsp = get_runtime()["vsp"]
 
     # 转向架自重
-    workflow.data["结果数据"]["转向架自重"]["测量值"] = plc.read("轮重测量1") \
-    + plc.read("轮重测量2") \
-    + plc.read("轮重测量3") \
-    + plc.read("轮重测量4")
+    workflow.data["结果数据"]["转向架自重"]["测量值"] = _vsp.read("称重台1") \
+    + _vsp.read("称重台2") \
+    + _vsp.read("称重台3") \
+    + _vsp.read("称重台4")
 
     return None
 
@@ -390,9 +390,13 @@ async def init_cal(node: "Node", workflow: "Workflow", data: Any) -> Any:
 # 计算--->载荷试验
 @register_algo("cal_press_trail")
 async def cal_press_trail(node: "Node", workflow: "Workflow", data: Any) -> Any:
-    plc = get_runtime().get("plc")
-    # 原点位置只与试验台有关、与车型无关，统一从 bed 读
-    base_pos = bed_section("原点位置")
+    _plc = get_runtime()["plc"]
+    _vsp = get_runtime()["vsp"]
+    _can = get_runtime()["can"]
+
+    _base_pos = bed_section("原点位置")
+    _base_size = bed_section("标定杆")
+
     cur_flow_data = get_runtime().get("wf")
     if cur_flow_data:
         bogie_spec = cur_flow_data.data["转向架数据"]
@@ -400,14 +404,14 @@ async def cal_press_trail(node: "Node", workflow: "Workflow", data: Any) -> Any:
         logging.error("工作流数据缺失!")
 
     # 加载力
-    workflow.data["结果数据"]["1位加载力"]["测量值"] = plc.read("加载压力1")
-    workflow.data["结果数据"]["2位加载力"]["测量值"] = plc.read("加载压力2")
+    workflow.data["结果数据"]["1位加载力"]["测量值"] = _plc.read("加载压力1")
+    workflow.data["结果数据"]["2位加载力"]["测量值"] = _plc.read("加载压力2")
 
     # 轮重
-    workflow.data["结果数据"]["1位轮重"]["测量值"] = plc.read("轮重测量1")
-    workflow.data["结果数据"]["2位轮重"]["测量值"] = plc.read("轮重测量2")
-    workflow.data["结果数据"]["3位轮重"]["测量值"] = plc.read("轮重测量3")
-    workflow.data["结果数据"]["4位轮重"]["测量值"] = plc.read("轮重测量4")
+    workflow.data["结果数据"]["1位轮重"]["测量值"] = _vsp.read("称重台1")
+    workflow.data["结果数据"]["2位轮重"]["测量值"] = _vsp.read("称重台2")
+    workflow.data["结果数据"]["3位轮重"]["测量值"] = _vsp.read("称重台3")
+    workflow.data["结果数据"]["4位轮重"]["测量值"] = _vsp.read("称重台4")
 
     # 轴重
     workflow.data["结果数据"]["1-2位轴重"]["测量值"] = workflow.data["结果数据"]["1位轮重"]["测量值"] + workflow.data["结果数据"]["2位轮重"]["测量值"]
@@ -432,17 +436,11 @@ async def cal_press_trail(node: "Node", workflow: "Workflow", data: Any) -> Any:
     # 34内侧距(不计算)
 
     # 13轴距
-    _data = workflow.data["结果数据"]["1-3位轴距"]
-    _d1 = plc.read("称重台X位移1")-base_pos["滑台位移1"]
-    _d2 = plc.read("称重台X位移3")-base_pos["滑台位移3"]
-    _cal = bogie_spec["轴距13"]+(_d1+_d2)
+    _cal = _base_size["轴距13"]+ _can.read("称重台位移1") + _can.read("称重台位移3")
     workflow.data["结果数据"]["1-3位轴距"]["测量值"] = round(_cal, 2)
 
     # 24轴距
-    _data = workflow.data["结果数据"]["2-4位轴距"]
-    _d1 = plc.read("称重台X位移2")-base_pos["滑台位移2"]
-    _d2 = plc.read("称重台X位移4")-base_pos["滑台位移4"]
-    _cal = bogie_spec["轴距24"]+(_d1+_d2)
+    _cal = _base_size["轴距24"]+ _can.read("称重台位移2") + _can.read("称重台位移4")
     workflow.data["结果数据"]["2-4位轴距"]["测量值"] = round(_cal, 2)
 
     # 回撤(数据修正): 由 runtime/fix 开关文件控制是否启用
@@ -478,22 +476,22 @@ async def cal_press_trail(node: "Node", workflow: "Workflow", data: Any) -> Any:
     workflow.data["结果数据"]['轴距差']["测量值"]=abs(workflow.data["结果数据"]["1-3位轴距"]["测量值"]-workflow.data["结果数据"]["2-4位轴距"]["测量值"])
 
     # 13位二系悬挂高度 H0 + d0 - d1 + r + R - (r+R)^2-L^2/4)^0.5
-    d=plc.read("加载头垂向位移1")
+    d=_plc.read("加载头垂向位移1")
     H=bogie_spec["H13"]
     D=bogie_spec["D13"]
     r=bogie_spec["R"]
     L=bogie_spec["L"]
-    R=workflow.data["转向架数据"]["平均轮径"]
+    R=bogie_spec["平均轮径"]
     _cal = H + D - d + r + R - math.sqrt((r + R)**2 - L**2/4)
     workflow.data["结果数据"]["1位二系悬挂高度"]["测量值"] = round(_cal, 2)
 
     # 24位二系悬挂高度
-    d=plc.read("加载头垂向位移2")
+    d=_plc.read("加载头垂向位移2")
     H=bogie_spec["H24"]
     D=bogie_spec["D24"]
     r=bogie_spec["R"]
     L=bogie_spec["L"]
-    R=workflow.data["转向架数据"]["平均轮径"]
+    R=bogie_spec["平均轮径"]
     _cal = H + D - d + r + R - math.sqrt((r + R)**2 - L**2/4)
     workflow.data["结果数据"]["2位二系悬挂高度"]["测量值"] = round(_cal, 2)
 
