@@ -1,6 +1,7 @@
 """空簧保压与差压试验监视页面。"""
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
@@ -83,6 +84,10 @@ class Window(QWidget):
     message_received = Signal(dict)
     page_cleared = Signal()
     TRIALS = ("空簧保压", "差压1->2", "差压2->1")
+    # 空簧保压自动停止: 试验参数中的判定时刻 (秒); 缺失/非法按默认 300, <=0 不判定
+    AUTO_STOP_PARAM = "空簧保压@自动停止时间"
+    AUTO_STOP_DEFAULT_SECONDS = 300.0
+    AUTO_STOP_LEAK_LIMIT = 5.0  # 两路压降都小于该值 (kPa) 才触发
     PRESSURE_KEYS = ("气压采集1", "气压采集2")
     LOAD_KEYS = ("加载头垂向位移1", "加载头垂向位移2", "加载压力1", "加载压力2")
 
@@ -97,6 +102,8 @@ class Window(QWidget):
         self._ends: dict[str, tuple[float, float]] = {}
         self._load_start: dict[str, float | None] = {}
         self._latest: tuple[float, float] | None = None
+        self._auto_stop_at: float | None = None  # 本轮判定时刻 (秒), None 表示不判定
+        self._auto_stop_checked = False  # 本轮是否已做过那一次判定 (落闩后不再判)
         self._subscriptions: list[Any] = []
         self._cards: dict[str, QFrame] = {}
         self.setObjectName("airplotDialog")
@@ -286,6 +293,8 @@ class Window(QWidget):
         self._ends.clear()
         self._load_start.clear()
         self._latest = None
+        self._auto_stop_at = None
+        self._auto_stop_checked = False
         # 加载数据 (试验前 / 当前)
         for field in self._load_labels.values():
             field.setText("—")
@@ -311,6 +320,11 @@ class Window(QWidget):
         if enabled:
             self._enabled = True
             self._capture_start = time.monotonic()
+            # 自动停止只针对空簧保压: 使能时快照判定时刻并复位闩锁, 本轮只判一次
+            self._auto_stop_checked = False
+            self._auto_stop_at = (
+                self._read_auto_stop_seconds() if trial == "空簧保压" else None
+            )
             self._ends.pop(trial, None)
             self._starts.pop(trial, None)
             self._latest = None
@@ -378,6 +392,8 @@ class Window(QWidget):
             self._ends.clear()
             self._load_start.clear()
             self._latest = None
+            self._auto_stop_at = None
+            self._auto_stop_checked = False
             self._chart.clear(900)
             self._update_card_states()
         state = getattr(getattr(workflow, "state", None), "value", None)
@@ -409,6 +425,7 @@ class Window(QWidget):
                     process = self._process_data()
                     process.setdefault("空簧气压1", []).append(readings[0])
                     process.setdefault("空簧气压2", []).append(readings[1])
+        self._maybe_auto_stop(readings)
         if trial and self._enabled and self._latest:
             # 只刷新当前激活试验对应的卡片; 其他试验卡片(含非激活差压方向)不会被触碰
             fields = self._fields.get(trial)
@@ -441,6 +458,64 @@ class Window(QWidget):
                 # 当前差压超出 [最小值, 最大值] 时红色背景提示
                 limit_key = "差压阀试验值1" if trial == "差压1->2" else "差压阀试验值2"
                 self._apply_limit_style(fields["当前差压"], diff, results.get(limit_key))
+
+    def _read_auto_stop_seconds(self) -> float | None:
+        """读试验参数中的自动停止判定时刻 (秒).
+
+        缺失/非法按默认 300 秒; <=0 (含用户约定的 =0) 表示不进行自动停止判断.
+        """
+        workflow = self._current_workflow()
+        data = getattr(workflow, "data", None)
+        params = data.get("试验参数") if isinstance(data, dict) else None
+        raw = params.get(self.AUTO_STOP_PARAM) if isinstance(params, dict) else None
+        try:
+            seconds = float(raw) if raw is not None else self.AUTO_STOP_DEFAULT_SECONDS
+        except (TypeError, ValueError):
+            seconds = self.AUTO_STOP_DEFAULT_SECONDS
+        return seconds if seconds > 0 else None
+
+    def _maybe_auto_stop(self, readings: list[float | None]) -> None:
+        """空簧保压自动停止的一次性判定 (每个使能周期只判一次).
+
+        判定点为第一个已越过配置秒数、且初始值与本节拍两路读数都有效的节拍:
+        读数无效时 _latest 保留的是旧值, 不能拿来判定, 也不消耗这次判定.
+        两路压降 (初始-当前) 都 < 5 kPa 时, 仅当流程确实还停在 "保压等待"
+        节点才调 skip_wait 提前结束等待——避免判定与等待自然结束擦肩时,
+        陈旧的 skip 事件被后面的等待节点误吞.
+        判完即落闩: 不满足时本轮不再判定, 一直等到停止信号.
+        """
+        if self._auto_stop_checked or self._auto_stop_at is None:
+            return
+        if not self._enabled or self._trial_type != "空簧保压":
+            return
+        elapsed = time.monotonic() - self._capture_start
+        if elapsed < self._auto_stop_at:
+            return
+        start = self._starts.get("空簧保压")
+        if start is None or any(value is None for value in readings):
+            return
+        self._auto_stop_checked = True
+        drops = (start[0] - readings[0], start[1] - readings[1])
+        if not all(drop < self.AUTO_STOP_LEAK_LIMIT for drop in drops):
+            return
+        workflow = self._current_workflow()
+        if workflow is None:
+            return
+        current = getattr(workflow, "cur_node", None)
+        if getattr(current, "node_name", None) != "保压等待":
+            return
+        process = self._process_data()
+        process["自动停止"] = {
+            "判定时刻秒": round(elapsed, 1),
+            "配置秒数": self._auto_stop_at,
+            "空簧1压降": round(drops[0], 2),
+            "空簧2压降": round(drops[1], 2),
+        }
+        logging.info(
+            "空簧保压自动停止: %.1fs 时两路压降 %.2f/%.2f kPa 均 < %.0f, 提前结束保压等待",
+            elapsed, drops[0], drops[1], self.AUTO_STOP_LEAK_LIMIT,
+        )
+        workflow.skip_wait()
 
     def closeEvent(self, event: Any) -> None:
         self._update_timer.stop()
