@@ -1003,6 +1003,8 @@ class WorkflowRuntimePanel(QWidget):
         status_row.setSpacing(4)
         self.state_label = QLabel("状态: idle", self)
         status_row.addWidget(self.state_label)
+        self.loop_label = QLabel("", self)
+        status_row.addWidget(self.loop_label)
         status_row.addStretch(1)
         if self.show_data:
             self.data_toggle_btn = QToolButton(self)
@@ -1065,6 +1067,7 @@ class WorkflowRuntimePanel(QWidget):
 
     def set_workflow_instance(self, workflow = None) -> None:
         self.workflow = workflow
+        self.loop_label.setText("")
         if not self.is_running():
             self._restore_workflow_runtime()
 
@@ -1221,7 +1224,17 @@ class WorkflowRuntimePanel(QWidget):
         self._render_data_text()
         self._persist_runtime_state()
 
+    def _refresh_loop_label(self) -> None:
+        flags = getattr(self.workflow, "flags", None)
+        total = flags.get("循环次数") if isinstance(flags, dict) else None
+        if not total:
+            self.loop_label.setText("")
+            return
+        current = flags.get("循环计数") or 0
+        self.loop_label.setText(f"当前循环次数 {int(current) + 1}/{int(total)}")
+
     def _handle_node_begin(self, payload: dict[str, object]) -> None:
+        self._refresh_loop_label()
         node_type = str(payload.get("node_type") or "").strip()
         node_args = payload.get("node_args")
         node_name = str(payload.get("node_name", ""))
@@ -1461,6 +1474,8 @@ class WorkflowRuntimePanel(QWidget):
         self._state = state
         self._error_message = error_message
         self.state_label.setText(f"状态: {state}")
+        if state != WorkflowState.RUNNING.value:
+            self.loop_label.setText("")
         self.state_changed.emit(state, error_message)
         if error_message:
             logger.error(f"workflow execution failed: %s", error_message)
