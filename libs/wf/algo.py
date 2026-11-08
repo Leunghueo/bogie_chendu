@@ -328,10 +328,12 @@ async def init_weight(node: "Node", workflow: "Workflow", data: Any) -> Any:
     _vsp = get_runtime()["vsp"]
 
     # 转向架自重
-    workflow.data["结果数据"]["转向架自重"]["测量值"] = _vsp.read("称重台1") \
+    _w = _vsp.read("称重台1") \
     + _vsp.read("称重台2") \
     + _vsp.read("称重台3") \
     + _vsp.read("称重台4")
+
+    workflow.data["结果数据"]["转向架自重"]["测量值"] = round(_w / 9.799, 2)
 
     return None
 
@@ -425,10 +427,12 @@ async def cal_press_trail(node: "Node", workflow: "Workflow", data: Any) -> Any:
     workflow.data["结果数据"]["4位轮重差"]["测量值"] = (workflow.data["结果数据"]["4位轮重"]["测量值"]-w34)/w34
 
     # 转向架载重
-    workflow.data["结果数据"]["转向架载重"]["测量值"] = workflow.data["结果数据"]["1位轮重"]["测量值"] \
+    _w = workflow.data["结果数据"]["1位轮重"]["测量值"] \
     + workflow.data["结果数据"]["2位轮重"]["测量值"] \
     + workflow.data["结果数据"]["3位轮重"]["测量值"] \
     + workflow.data["结果数据"]["4位轮重"]["测量值"]
+
+    workflow.data["结果数据"]["转向架载重"]["测量值"]= round(_w / 9.799, 2)
 
     # 12内侧距(不计算)
 
