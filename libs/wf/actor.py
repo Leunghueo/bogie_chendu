@@ -522,7 +522,6 @@ async def run_loop_begin(node: Node, workflow: "Workflow") -> str | None:
     }
     return None
 
-
 @register_node_actor("loop_end")
 async def run_loop_end(node: Node, workflow: "Workflow") -> str | None:
     begin_id = workflow.flags["循环起点"]
@@ -552,7 +551,6 @@ async def _wait_for_selection(node: Node, workflow: "Workflow") -> str:
         if selected_node in node.next_nodes:
             workflow.data["分支节点"] = node.node_id
             return selected_node
-
 
 async def _resolve_loop_count(node: Node, workflow: "Workflow") -> int:
     try:

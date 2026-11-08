@@ -85,9 +85,10 @@ class Window(QWidget):
     page_cleared = Signal()
     TRIALS = ("空簧保压", "差压1->2", "差压2->1")
     # 空簧保压自动停止: 试验参数中的判定时刻 (秒); 缺失/非法按默认 300, <=0 不判定
-    AUTO_STOP_PARAM = "空簧保压@自动停止时间"
+    AUTO_STOP_TIME_KEY = "空簧保压@自动停止时间"
+    AUTO_STOP_LEAK_KEY = "空簧保压@自动停止压差"
     AUTO_STOP_DEFAULT_SECONDS = 300.0
-    AUTO_STOP_LEAK_LIMIT = 5.0  # 两路压降都小于该值 (kPa) 才触发
+    AUTO_STOP_LEAK_LIMIT = 2.0  # 两路压降都小于该值 (kPa) 才触发
     PRESSURE_KEYS = ("气压采集1", "气压采集2")
     LOAD_KEYS = ("加载头垂向位移1", "加载头垂向位移2", "加载压力1", "加载压力2")
 
@@ -467,7 +468,8 @@ class Window(QWidget):
         workflow = self._current_workflow()
         data = getattr(workflow, "data", None)
         params = data.get("试验参数") if isinstance(data, dict) else None
-        raw = params.get(self.AUTO_STOP_PARAM) if isinstance(params, dict) else None
+        raw = params.get(self.AUTO_STOP_TIME_KEY) if isinstance(params, dict) else None
+        self.AUTO_STOP_LEAK_LIMIT = params.get(self.AUTO_STOP_LEAK_KEY) if isinstance(params, dict) else 2
         try:
             seconds = float(raw) if raw is not None else self.AUTO_STOP_DEFAULT_SECONDS
         except (TypeError, ValueError):
