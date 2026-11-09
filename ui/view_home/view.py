@@ -11,7 +11,7 @@ from threading import Event
 from uuid import uuid4
 
 from PySide6.QtCore import QEvent, QObject, QThread, Qt, Signal, QTimer
-from PySide6.QtGui import QBrush, QColor
+from PySide6.QtGui import QBrush, QColor, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -1762,6 +1762,16 @@ class Window(QWidget):
         header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.workflow_list.currentItemChanged.connect(self._switch_workflow)
         self.workflow_list.itemDoubleClicked.connect(self._on_workflow_double_clicked)
+        self.workflow_list.currentItemChanged.connect(self._on_workflow_current_changed)
+        # 选中行只加粗字体、不改背景色: 把高亮刷成透明, 让选中时仍透出各行
+        # 自己的状态底色 (cell background), 选中文字颜色也保持普通文本色
+        list_palette = self.workflow_list.palette()
+        list_palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 0, 0, 0))
+        list_palette.setColor(
+            QPalette.ColorRole.HighlightedText,
+            list_palette.color(QPalette.ColorRole.Text),
+        )
+        self.workflow_list.setPalette(list_palette)
         layout.addWidget(self.workflow_list, 1)
         run_row = QHBoxLayout()
         self.start_flow_btn = QPushButton("开始试验", panel)
@@ -2255,9 +2265,30 @@ class Window(QWidget):
                 selected_row = row_index
         if selected_row >= 0:
             self.workflow_list.setCurrentCell(selected_row, 0)
+        self._apply_workflow_selection_style()
         self.workflow_list.blockSignals(False)
         self._refresh_current_flow_label()
         self._refresh_workflow_actions()
+
+    def _on_workflow_current_changed(
+        self, current: QTableWidgetItem | None, previous: QTableWidgetItem | None
+    ) -> None:
+        del current, previous
+        self._apply_workflow_selection_style()
+
+    def _apply_workflow_selection_style(self) -> None:
+        """选中行只把字体加粗, 背景保持各行的状态色不变。"""
+        current_row = self.workflow_list.currentRow()
+        for row in range(self.workflow_list.rowCount()):
+            bold = row == current_row
+            for col in range(self.workflow_list.columnCount()):
+                item = self.workflow_list.item(row, col)
+                if item is None:
+                    continue
+                font = item.font()
+                if font.bold() != bold:
+                    font.setBold(bold)
+                    item.setFont(font)
 
     def _switch_workflow(self, current: QTableWidgetItem | None, previous: QTableWidgetItem | None) -> None:
         del previous
