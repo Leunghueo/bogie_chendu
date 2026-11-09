@@ -99,6 +99,9 @@ class Window(QWidget):
         self._trial_type: str | None = None
         self._workflow_id: str | None = None
         self._capture_start = 0.0
+        # 预览绘图的时间零点: 页面清空后第一笔有效读数的时刻; 与试验记录
+        # 开关 (_enabled) 解耦, 充气阶段也能实时看到气压曲线
+        self._preview_start: float | None = None
         self._starts: dict[str, tuple[float, float]] = {}
         self._ends: dict[str, tuple[float, float]] = {}
         self._load_start: dict[str, float | None] = {}
@@ -290,6 +293,7 @@ class Window(QWidget):
         self._trial_type = None
         self._workflow_id = None
         self._capture_start = 0.0
+        self._preview_start = None
         self._starts.clear()
         self._ends.clear()
         self._load_start.clear()
@@ -320,7 +324,11 @@ class Window(QWidget):
         enabled = payload.get("enabled") is True
         if enabled:
             self._enabled = True
+            # _capture_start 只是自动停止的判定锚点 (自开启时刻计时);
+            # 绘图零点是 _preview_start, 开启试验不再清图, 曲线保持连续
             self._capture_start = time.monotonic()
+            if self._preview_start is None:
+                self._preview_start = self._capture_start
             # 自动停止只针对空簧保压: 使能时快照判定时刻并复位闩锁, 本轮只判一次
             self._auto_stop_checked = False
             self._auto_stop_at = (
@@ -333,11 +341,9 @@ class Window(QWidget):
             for field in self._fields[trial].values():
                 field.setText("—")
                 field.setStyleSheet("")  # 清除上一轮的超限红色背景
-            self._chart.clear(900)
             readings = self._read_values(self.PRESSURE_KEYS)
             if all(value is not None for value in readings):
                 self._starts[trial] = (readings[0], readings[1])
-                self._chart.append_data(0, readings[0], readings[1])
             if trial == "空簧保压":
                 # 过程数据: 试验开始时清空数组并写入首点 (差压试验不记录)
                 process = self._process_data()
@@ -395,6 +401,7 @@ class Window(QWidget):
             self._latest = None
             self._auto_stop_at = None
             self._auto_stop_checked = False
+            self._preview_start = None
             self._chart.clear(900)
             self._update_card_states()
         state = getattr(getattr(workflow, "state", None), "value", None)
@@ -419,13 +426,16 @@ class Window(QWidget):
         readings = self._read_values(self.PRESSURE_KEYS)
         if all(value is not None for value in readings):
             self._latest = readings[0], readings[1]
-            if self._enabled:
-                self._chart.append_data(time.monotonic() - self._capture_start, *self._latest)
-                if self._trial_type == "空簧保压":
-                    # 采样值写入工作流过程数据 (差压试验不记录)
-                    process = self._process_data()
-                    process.setdefault("空簧气压1", []).append(readings[0])
-                    process.setdefault("空簧气压2", []).append(readings[1])
+            # 预览绘图与记录开关解耦: 清空后只要有有效读数就持续画,
+            # 充气阶段的气压爬升也能实时看到
+            if self._preview_start is None:
+                self._preview_start = time.monotonic()
+            self._chart.append_data(time.monotonic() - self._preview_start, *self._latest)
+            if self._enabled and self._trial_type == "空簧保压":
+                # 采样值写入工作流过程数据 (差压试验不记录)
+                process = self._process_data()
+                process.setdefault("空簧气压1", []).append(readings[0])
+                process.setdefault("空簧气压2", []).append(readings[1])
         self._maybe_auto_stop(readings)
         if trial and self._enabled and self._latest:
             # 只刷新当前激活试验对应的卡片; 其他试验卡片(含非激活差压方向)不会被触碰
