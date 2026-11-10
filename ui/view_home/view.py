@@ -2301,14 +2301,16 @@ class Window(QWidget):
         self._set_fault("")
 
     def _on_workflow_double_clicked(self, item) -> None:
-        if item is None or self.workflow_panel.is_running():
+        if item is None:
             return
         id_item = self.workflow_list.item(item.row(), 0)
         if id_item is None:
             return
         job_id = str(id_item.data(Qt.UserRole) or "")
         if job_id:
-            self._show_job_result(job_id)
+            # 执行中改为只读快照查看: 不写回记录; 面板绑定不受影响
+            # (_switch_workflow 的运行门保留, 节点显示仍绑在运行工单上)
+            self._show_job_result(job_id, view_only=self.workflow_panel.is_running())
 
     def _job_result_template(self, job: dict) -> dict:
         """作业尚无 summary 时的结果数据兜底.
@@ -2335,12 +2337,42 @@ class Window(QWidget):
                 item["测量值"] = ""
         return result
 
-    def _show_job_result(self, job_id: str) -> None:
+    @staticmethod
+    def _result_items(result_data: dict) -> list:
+        """结果数据 dict -> ResultDialog 的 items (优先只取带打印标记的项)."""
+        items = [
+            (name, item)
+            for name, item in result_data.items()
+            if isinstance(item, dict) and item.get("打印", False)
+        ]
+        if not items:
+            items = [
+                (name, item) for name, item in result_data.items() if isinstance(item, dict)
+            ]
+        return items
+
+    def _running_job_result_data(self, job_id: str) -> dict | None:
+        """job_id 正是当前运行工单时返回运行器内存中的结果数据副本, 否则 None."""
+        panel = self.workflow_panel
+        if not panel.is_running():
+            return None
+        wf = getattr(panel, "workflow", None)
+        if wf is None or str(getattr(wf, "id", "")) != job_id:
+            return None
+        data = getattr(wf, "data", None)
+        stored = data.get("结果数据") if isinstance(data, dict) else None
+        if isinstance(stored, dict) and stored:
+            return copy.deepcopy(stored)
+        return None
+
+    def _show_job_result(self, job_id: str, *, view_only: bool = False) -> None:
         """弹出 dialog_result 显示该任务当前的结果数据 (作业库 summary 字段).
 
         无条件打开: 尚无结果时也打开空表, 便于随时查看最新结果.
         与 history 页补录同一写法: 对话框确认后, 整块更新 summary/meta
         两列并把补录条目并入 logs 留痕; 取消则什么都不写.
+        view_only (执行中查看): 只读快照, 不写回; 若查看的正是运行工单,
+        数据取运行器内存现状并可刷新重读.
         """
         job = None
         try:
@@ -2356,24 +2388,30 @@ class Window(QWidget):
         result_data = copy.deepcopy(summary) if isinstance(summary, dict) else {}
         if not result_data:
             result_data = self._job_result_template(job)
-        items = [
-            (name, item)
-            for name, item in result_data.items()
-            if isinstance(item, dict) and item.get("打印", False)
-        ]
-        if not items:
-            items = [
-                (name, item) for name, item in result_data.items() if isinstance(item, dict)
-            ]
+        refresh_callback = None
+        if view_only:
+            live = self._running_job_result_data(job_id)
+            if live is not None:
+                result_data = live
+
+                def refresh_callback():
+                    fresh = self._running_job_result_data(job_id)
+                    return self._result_items(fresh) if fresh is not None else None
+        items = self._result_items(result_data)
         meta = dict(job.get("meta") or {})
         dialog = ResultDialog(
             items,
             self,
             result_store=result_data,
             checker=str(meta.get("互检员") or ""),
+            read_only=view_only,
+            refresh_callback=refresh_callback,
         )
-        dialog.setWindowTitle(f"结果数据 - {job.get('name') or ''}")
+        title = f"结果数据 - {job.get('name') or ''}"
+        dialog.setWindowTitle(title + "（执行中快照）" if view_only else title)
         if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        if view_only:
             return
         meta["互检员"] = dialog.checker
         try:
