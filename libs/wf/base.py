@@ -19,6 +19,11 @@ class NodeStoppedError(RuntimeError):
     pass
 
 
+class NodeRedirectError(RuntimeError):
+    """重定向请求: 中断当前节点, 排气泄压后跳回 select 节点 (不停止流程)."""
+    pass
+
+
 class WorkflowState(StrEnum):
     IDLE = "待执行"
     RUNNING = "执行中"

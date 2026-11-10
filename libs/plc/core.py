@@ -1013,6 +1013,14 @@ class PLCPointTable:
             self.broker.publish(topic="plc_poll", **kwargs)
 
     def _emc_stop(self):
+        """软急停: 起守护线程跑排气->泄压->复位全流程, 返回该线程.
+
+        已有急停流程在执行时不重复启动, 直接返回同一线程 (供等待方 await 完成)."""
+        existing = getattr(self, "_emc_thread", None)
+        if existing is not None and existing.is_alive():
+            logging.info("急停事件: 软急停流程已在执行, 不重复启动")
+            return existing
+
         def _emc_stop_worker():
             try:
                 logging.info("急停事件: 启动软急停流程")
@@ -1099,7 +1107,10 @@ class PLCPointTable:
             except Exception as e:
                 logging.exception(f"紧急停止失败: {e}")
 
-        threading.Thread(target=_emc_stop_worker, daemon=True, name="emc-stop-worker").start()
+        thread = threading.Thread(target=_emc_stop_worker, daemon=True, name="emc-stop-worker")
+        self._emc_thread = thread
+        thread.start()
+        return thread
 
     def clear(self):
         """将地址60-64全部置0"""

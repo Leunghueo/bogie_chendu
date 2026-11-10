@@ -2,7 +2,7 @@
 流程步骤执行确认对话框
 
 - 屏蔽直接关闭: 标题栏 X 按钮 + closeEvent 都被禁用
-- 自定义按钮: "确认执行" (蓝色) / "中止流程" (红色)
+- 唯一按钮: "确认执行" (蓝色); 不提供中止入口, 退出流程走主页"中断试验"
 - 非模态: 通过 finished 信号异步回调, 由调用方负责 deleteLater
 """
 from __future__ import annotations
@@ -17,7 +17,7 @@ class ConfirmDialog(QDialog):
 
     行为约束:
     - 不允许用户通过标题栏关闭按钮直接关闭 (屏蔽 X + closeEvent 始终 ignore)
-    - 必须通过 "确认执行" 或 "中止流程" 二选一返回结果
+    - 只能通过 "确认执行" 返回结果 (Esc 的 reject 同样被屏蔽)
     - 非模态, 与主窗口可交互; 通过 finished 信号异步回调
 
     使用示例:
@@ -27,7 +27,7 @@ class ConfirmDialog(QDialog):
 
     finished 信号参数:
     - QDialog.Accepted -> 用户点击 "确认执行"
-    - QDialog.Rejected -> 用户点击 "中止流程" 或按下 Esc
+    - QDialog.Rejected -> 不再由用户操作触发 (仅程序内部关闭时)
     """
 
     def __init__(self, node_name: str, info: str = "", parent=None) -> None:
@@ -85,27 +85,6 @@ class ConfirmDialog(QDialog):
         button_row = QHBoxLayout()
         button_row.setSpacing(12)
 
-        # 中止流程 -> 红色
-        self._abort_btn = QPushButton("中止流程", self)
-        self._abort_btn.setMinimumHeight(44)
-        self._abort_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._abort_btn.setStyleSheet(
-            "QPushButton {"
-            " background: qlineargradient(x1:0, y1:0, x2:0, y2:1,"
-            " stop:0 #dc2626, stop:1 #b91c1c);"
-            " color: white; border: none; border-radius: 6px;"
-            " font-size: 15px; font-weight: 600; padding: 0 24px;"
-            "}"
-            "QPushButton:hover {"
-            " background: qlineargradient(x1:0, y1:0, x2:0, y2:1,"
-            " stop:0 #ef4444, stop:1 #dc2626);"
-            "}"
-            "QPushButton:pressed {"
-            " background: qlineargradient(x1:0, y1:0, x2:0, y2:1,"
-            " stop:0 #b91c1c, stop:1 #991b1b);"
-            "}"
-        )
-        self._abort_btn.clicked.connect(self.reject)
 
         # 确认执行 -> 蓝色 (默认按钮)
         self._confirm_btn = QPushButton("确认执行", self)
@@ -133,7 +112,6 @@ class ConfirmDialog(QDialog):
 
         button_row.addWidget(self._confirm_btn)
         button_row.addStretch(1)
-        button_row.addWidget(self._abort_btn)
         layout.addLayout(button_row)
 
         self.setStyleSheet(
@@ -144,6 +122,10 @@ class ConfirmDialog(QDialog):
     def closeEvent(self, event: QCloseEvent) -> None:  # type: ignore[override]
         """屏蔽直接关闭: 忽略所有 close 事件 (X / Alt+F4 / 系统菜单).
 
-        弹窗只能通过 "确认执行" 或 "中止流程" 按钮返回结果.
+        弹窗只能通过 "确认执行" 按钮返回结果.
         """
         event.ignore()
+
+    def reject(self) -> None:  # type: ignore[override]
+        """屏蔽 Esc 引发的 reject: 不返回结果, 弹窗保持打开."""
+        pass

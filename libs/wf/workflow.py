@@ -18,7 +18,7 @@ try:
     from jobstore import local_now as _job_local_now, upsert_snapshot as _job_upsert_snapshot
 except ModuleNotFoundError:  # pragma: no cover - fallback for package imports
     from libs.jobstore import local_now as _job_local_now, upsert_snapshot as _job_upsert_snapshot
-from .base import EventEmitter, NodeStoppedError, WorkflowError, WorkflowState, utc_now
+from .base import EventEmitter, NodeRedirectError, NodeStoppedError, WorkflowError, WorkflowState, utc_now
 from .node import ConfirmHandler, LoopHandler, Node, ResultHandler, SelectHandler
 
 
@@ -51,6 +51,9 @@ class Workflow:
         self._stop_requested = False
         self._stop_event = threading.Event()
         self._skip_wait_event = threading.Event()
+        self._redirect_event = threading.Event()
+        self._redirect_requested = False
+        self._redirect_in_progress = False
         self._running_loop: asyncio.AbstractEventLoop | None = None
         self._running_task: asyncio.Task[Any] | None = None
         self.select_handler = select_handler
@@ -112,6 +115,8 @@ class Workflow:
         self._stop_requested = False
         self._stop_event.clear()
         self._skip_wait_event.clear()
+        self._redirect_event.clear()
+        self._redirect_requested = False
         for node in self.nodes.values():
             node.reset()
         if not force:
@@ -140,6 +145,29 @@ class Workflow:
     def is_stop_requested(self) -> bool:
         return self._stop_requested
 
+    def request_redirect(self) -> None:
+        """请求重定向 (中断试验): 中断当前节点, 待主循环排气泄压后跳回 select 节点重选支路.
+
+        与 stop() 的区别: 不置停止标志、不取消运行任务, 流程保持执行中;
+        无 select 节点的流程由主循环回落为真停止. 这里先行取消 PLC 侧挂起动作,
+        避免被中断支路的残留写点与随后的急停流程冲突."""
+        if self.state == WorkflowState.RUNNING:
+            self._redirect_requested = True
+            self._redirect_event.set()
+            try:
+                plc = get_runtime().get("plc")
+            except Exception:
+                plc = None
+            if plc is not None and hasattr(plc, "cancel_pending_actions"):
+                try:
+                    plc.cancel_pending_actions()
+                except Exception:
+                    logger.exception("failed to cancel plc actions")
+
+    def check_redirected(self) -> None:
+        if self._redirect_requested:
+            raise NodeRedirectError("workflow redirect requested")
+
     def check_stopped(self) -> None:
         if self._stop_requested:
             raise NodeStoppedError("workflow stopped")
@@ -163,6 +191,8 @@ class Workflow:
             while remaining is None or remaining > 0:
                 if self._skip_wait_event.is_set():
                     return "skip"
+                if self._redirect_event.is_set():
+                    return "redirect"
                 if self._stop_event.wait(0):
                     return "stop"
                 step = interval if remaining is None else min(interval, remaining)
@@ -177,11 +207,46 @@ class Workflow:
         except asyncio.CancelledError:
             self.check_stopped()
             raise
+        if result == "redirect":
+            raise NodeRedirectError("workflow redirect requested")
         if result == "skip":
             self._skip_wait_event.clear()
             return True
         self.check_stopped()
         return False
+
+    async def _do_redirect(self) -> bool:
+        """执行重定向: 等软急停 (排气->泄压) 完成, 把当前节点切到 select 节点.
+
+        返回 False 表示流程没有 select 节点, 调用方应回落真停止."""
+        self._redirect_requested = False
+        self._redirect_event.clear()
+        select_node = next((n for n in self.nodes.values() if n.node_type == "select"), None)
+        if select_node is None:
+            return False
+        self._redirect_in_progress = True
+        try:
+            await self._await_emc_stop()
+        finally:
+            self._redirect_in_progress = False
+            # 急停等待期间新到的重定向请求一并吸收: 操作员已回到选择点, 需要时可再按
+            self._redirect_requested = False
+            self._redirect_event.clear()
+        self._append_workflow_log("evt_wf_redirect")
+        self.cur_node = select_node
+        return True
+
+    async def _await_emc_stop(self) -> None:
+        """调 plc._emc_stop 并等其线程结束; 等待期间真停止 (stop 的任务取消) 仍可抢占."""
+        try:
+            plc = get_runtime().get("plc")
+        except Exception:
+            plc = None
+        if plc is None or not hasattr(plc, "_emc_stop"):
+            return
+        thread = plc._emc_stop()
+        if thread is not None:
+            await asyncio.to_thread(thread.join)
 
     async def start(self) -> WorkflowState:
         if self.state == WorkflowState.RUNNING:
@@ -193,6 +258,8 @@ class Workflow:
         self._stop_requested = False
         self._stop_event.clear()
         self._skip_wait_event.clear()
+        self._redirect_event.clear()
+        self._redirect_requested = False
         self.state = WorkflowState.RUNNING
         self.cur_node = self.nodes["head"]
         self._running_loop = asyncio.get_running_loop()
@@ -203,13 +270,23 @@ class Workflow:
         try:
             while self.cur_node is not None:
                 self.check_stopped()
+                if self._redirect_requested:
+                    # 节点间隙收到重定向请求 (上一节点已 finish): 不经节点执行, 直接处理
+                    if not await self._do_redirect():
+                        self._stop_requested = True
+                        raise NodeStoppedError("workflow stopped")
+                    continue
 
                 current_node = self.cur_node
                 current_node.begin(self)
+                redirect_hit = False
                 try:
                     await self._run_common_node_args(current_node)
                     next_node_id = await current_node.act(self)
                     current_node.finish_done(self)
+                except NodeRedirectError:
+                    current_node.finish_stopped()
+                    redirect_hit = True
                 except NodeStoppedError:
                     current_node.finish_stopped()
                     raise
@@ -218,6 +295,12 @@ class Workflow:
                     raise
                 finally:
                     self._extend_logs(current_node.node_logs)
+
+                if redirect_hit:
+                    if not await self._do_redirect():
+                        self._stop_requested = True
+                        raise NodeStoppedError("workflow stopped")
+                    continue
 
                 if current_node.node_id == "end":
                     self.state = WorkflowState.DONE
@@ -397,6 +480,8 @@ class Workflow:
             raise WorkflowError(f"loop_end node {loop_end_node.node_id} is missing loop context")
 
         if current < total:
+            # 标记本次跳回为循环内续跑, loop_begin 据此保留计数 (其余到达一律清零重数)
+            self.flags["_loop_resume"] = True
             return begin_id
 
         self.flags["循环次数"] = None

@@ -301,6 +301,7 @@ async def _wait_done_conditions(
     while pending:
         try:
             workflow.check_stopped()
+            workflow.check_redirected()
         except BaseException:
             raise
 
@@ -413,6 +414,7 @@ async def run_plc_start(node: Node, workflow: "Workflow") -> str | None:
             if actlist_executed and wait_before_watch > 0:
                 await asyncio.sleep(wait_before_watch)
                 workflow.check_stopped()
+                workflow.check_redirected()
             await _wait_done_conditions(workflow, wait_conditions)
 
     if reset_actlist:
@@ -510,7 +512,10 @@ async def run_cond(node: Node, workflow: "Workflow") -> str:
 
 @register_node_actor("loop_begin")
 async def run_loop_begin(node: Node, workflow: "Workflow") -> str | None:
-    if workflow.flags["循环起点"] != node.node_id or workflow.flags["循环次数"] is None:
+    # 到达循环起点一律清零重数 (用户意图: 重新来过); 唯一例外是 loop_end 内部跳回的
+    # 续跑——它会留下 _loop_resume 标记, 在此消费并保留计数
+    resume = workflow.flags.pop("_loop_resume", False)
+    if not resume or workflow.flags["循环起点"] != node.node_id or workflow.flags["循环次数"] is None:
         total = await _resolve_loop_count(node, workflow)
         workflow.flags["循环起点"] = node.node_id
         workflow.flags["循环次数"] = total
