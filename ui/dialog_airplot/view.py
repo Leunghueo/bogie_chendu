@@ -147,32 +147,32 @@ class Window(QWidget):
         root.setContentsMargins(10, 10, 10, 10)
         root.setSpacing(8)
 
-        load_card, load_layout = self._card("加载数据（初始 / 当前）")
-        load_grid = QGridLayout()
-        load_grid.setHorizontalSpacing(8)
-        load_grid.setVerticalSpacing(4)
-        self._load_labels: dict[str, QLabel] = {}
-        for index, (text, unit) in enumerate((
-            ("垂向位移①（初始/当前）", "mm"), ("垂向位移②（初始/当前）", "mm"),
-            ("加载力①（初始/当前）", "kN"), ("加载力②（初始/当前）", "kN"),
-        )):
-            row, col = divmod(index, 2)
-            base = col * 4
-            load_grid.addWidget(QLabel(text), row, base)
-            for offset, title in enumerate(("试验前加载数据", "当前加载数据")):
-                field = QLabel("—")
-                field.setObjectName("airplotValue")
-                field.setAlignment(Qt.AlignCenter)
-                field.setToolTip("初始值" if offset == 0 else "当前值")
-                self._load_labels[f"{title}:{index}"] = field
-                load_grid.addWidget(field, row, base + offset + 1)
-            unit_label = QLabel(unit)
-            unit_label.setFixedWidth(26)
-            load_grid.addWidget(unit_label, row, base + 3)
-            load_grid.setColumnStretch(base + 1, 1)
-            load_grid.setColumnStretch(base + 2, 1)
-        load_layout.addLayout(load_grid)
-        root.addWidget(load_card)
+        # load_card, load_layout = self._card("加载数据（初始 / 当前）")
+        # load_grid = QGridLayout()
+        # load_grid.setHorizontalSpacing(8)
+        # load_grid.setVerticalSpacing(4)
+        # self._load_labels: dict[str, QLabel] = {}
+        # for index, (text, unit) in enumerate((
+        #     ("垂向位移①（初始/当前）", "mm"), ("垂向位移②（初始/当前）", "mm"),
+        #     ("加载力①（初始/当前）", "kN"), ("加载力②（初始/当前）", "kN"),
+        # )):
+        #     row, col = divmod(index, 2)
+        #     base = col * 4
+        #     load_grid.addWidget(QLabel(text), row, base)
+        #     for offset, title in enumerate(("试验前加载数据", "当前加载数据")):
+        #         field = QLabel("—")
+        #         field.setObjectName("airplotValue")
+        #         field.setAlignment(Qt.AlignCenter)
+        #         field.setToolTip("初始值" if offset == 0 else "当前值")
+        #         self._load_labels[f"{title}:{index}"] = field
+        #         load_grid.addWidget(field, row, base + offset + 1)
+        #     unit_label = QLabel(unit)
+        #     unit_label.setFixedWidth(26)
+        #     load_grid.addWidget(unit_label, row, base + 3)
+        #     load_grid.setColumnStretch(base + 1, 1)
+        #     load_grid.setColumnStretch(base + 2, 1)
+        # load_layout.addLayout(load_grid)
+        # root.addWidget(load_card)
 
         chart_card, chart_layout = self._card("空气弹簧气压曲线")
         self._status_label = QLabel("当前试验：未开始")

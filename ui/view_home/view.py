@@ -125,7 +125,7 @@ class WaitCountdownDialog(QDialog):
 
         self._countdown_label = QLabel(self)
         self._countdown_label.setAlignment(Qt.AlignCenter)
-        self._countdown_label.setStyleSheet("color: #f28c28; font-size: 72px; font-weight: 800;")
+        self._countdown_label.setStyleSheet("color: #f28c28; font-size: 55px; font-weight: 600;")
         layout.addStretch(1)
         layout.addWidget(self._countdown_label)
 
@@ -133,6 +133,7 @@ class WaitCountdownDialog(QDialog):
         self._cancel_button.setMinimumHeight(44)
         layout.addWidget(self._cancel_button)
         layout.addStretch(1)
+        self._cancel_button.hide()
 
         self.wait_event.connect(self._apply_wait_payload)
         self._render_countdown()
