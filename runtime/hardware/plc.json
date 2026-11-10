@@ -2256,6 +2256,16 @@
       "desc": "无",
       "show": true
     },
+    "返修工装允许": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "64.07",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
     "测12位轮对电阻": {
       "io": "o",
       "type": "BOOL",
