@@ -133,16 +133,7 @@ class WaitCountdownDialog(QDialog):
         self._cancel_button.setMinimumHeight(44)
         layout.addWidget(self._cancel_button)
         layout.addStretch(1)
-<<<<<<< HEAD
         self._cancel_button.hide()
-=======
-        # “跳过等待”按钮显隐由 app.ini 的 [ui] enable_skip 控制(缺失/非法按 false 隐藏, 改后重启生效)
-        try:
-            show_skip = self.runtime["config"].getboolean("ui", "enable_skip", fallback=False)
-        except Exception:
-            show_skip = False
-        self._cancel_button.setVisible(bool(show_skip))
->>>>>>> ee0185bae454c2ef58dc3abae9d4e4774db74fcd
 
         self.wait_event.connect(self._apply_wait_payload)
         self._render_countdown()
