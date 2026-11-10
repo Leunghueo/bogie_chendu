@@ -2348,7 +2348,8 @@ class Window(QWidget):
 
     def _on_workflow_running_changed(self, running: bool) -> None:
         self.create_flow_btn.setEnabled(not running)
-        self.workflow_list.setEnabled(not running)
+        # 工单列表运行期间保持可用: 双击查看只读快照依赖它的鼠标事件;
+        # 切换绑定有 _switch_workflow 的运行门, 开始/删除按钮另有独立门控
         self.stop_flow_btn.setEnabled(running)
         self.select_cmd_btn.setEnabled(running)
         self._refresh_workflow_actions()
