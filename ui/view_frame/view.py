@@ -40,6 +40,7 @@ except ModuleNotFoundError:  # pragma: no cover - 本快照无 view_ai
     check_ollama_status = None
 from ui.view_login.view import Window as LoginWindow
 from ui.wgt_tab.view import TabWidget
+from ui.status_dashboard import StatusDashboard
 
 
 class FaultLabel(QLabel):
@@ -232,6 +233,11 @@ class Window(QMainWindow):
         self.logo.setPixmap(pixmap.scaledToHeight(40, Qt.SmoothTransformation))
         logo_layout.addWidget(self.logo)
         layout.addWidget(self.logo_card)
+
+        # 全局实时状态 Dashboard (原主页顶部展示区, 现挂在顶层框架, 所有页面可见);
+        # 刷新由 _apply_runtime_event 的 plc_poll 分支在主线程驱动
+        self._dashboard = StatusDashboard(self)
+        layout.addWidget(self._dashboard)
 
         self.tab_widget = TabWidget(self)
         self.tab_widget.setObjectName("mainTabs")
@@ -506,6 +512,7 @@ class Window(QMainWindow):
 
         if topic == "plc_poll":
             self._plc_ready = bool(payload.get("alive"))
+            self._dashboard.refresh_data()
 
         elif topic == "vsp_poll":
             self._vsp_ready = bool(payload.get("alive"))
