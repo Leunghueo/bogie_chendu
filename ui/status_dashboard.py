@@ -6,8 +6,6 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
-
-    QVBoxLayout,
     QWidget,
 )
 
@@ -23,9 +21,10 @@ class StatusDashboard(QFrame):
 
     # 每行 = [组1, 组2, ...], 每组内为 (pt_name, 显示标题); 组间插入分隔线; 标题为空串时直接显示点位名
     _LED_ROWS: list[list[list[tuple[str, str]]]] = [
-        # 第一行: 模式 / 加载压力 / 加载头位移
+        # 第一行: 模式 / 引导轨限位 / 加载压力 / 加载头位移
         [
             [("手动", ""), ("自动", "")],
+            [("引导轨上限位", ""), ("引导轨下限位", "")],
             [("加载压力1", ""), ("加载压力2", "")],
             [("加载头垂向位移1", "压头垂向1"), ("加载头垂向位移2", "压头垂向2")],
             [("压头横向1", "压头水平1"), ("压头横向2", "压头水平2")],
@@ -72,8 +71,8 @@ class StatusDashboard(QFrame):
 
     # 防沉降气缸点动按钮: (显示标题, plc 点位名)
     _PT_BUTTONS: list[tuple[str, str]] = [
-        ("防沉开", "防沉降气缸伸出"),
-        ("防沉关", "防沉降气缸收回"),
+        ("防沉伸", "防沉降气缸伸出"),
+        ("防沉收", "防沉降气缸收回"),
     ]
     #: True = 点动脉冲(置 True 后 2 秒自动写 False); False = 点一下就一直保持
     _PT_BUTTON_RESET_DELAY = True
@@ -112,9 +111,7 @@ class StatusDashboard(QFrame):
         layout.setSpacing(10)
 
 
-        # 中间: 上下两行点位数据
-        data_column = QVBoxLayout()
-        data_column.setSpacing(6)
+        # 点位数据与按钮全部单行排列 (组间竖线分隔), 区域高度即一行控件高
 
         self._leds: list[PtLed] = []
         for row_groups in self._LED_ROWS:
@@ -136,15 +133,14 @@ class StatusDashboard(QFrame):
                 if group_index < len(row_groups) - 1:
                     row.addWidget(vline())
             row.addStretch(1)
-            data_column.addLayout(row)
-        data_column.addStretch(1)
+            layout.addLayout(row, 1)
 
-        layout.addLayout(data_column, 1)
+        layout.addWidget(vline(), 0)
 
-        # 最前: 防沉降气缸点动按钮（上下排列，尽量少占宽度）
-        button_col = QVBoxLayout()
-        button_col.setSpacing(4)
-        button_col.setAlignment(Qt.AlignVCenter)
+        # 防沉降气缸点动按钮: 水平排列, 与点位数据同行
+        button_row = QHBoxLayout()
+        button_row.setSpacing(4)
+        button_row.setAlignment(Qt.AlignVCenter)
         self._pt_buttons: list[PtButton] = []
         for title, pt_name in self._PT_BUTTONS:
             button = PtButton(
@@ -155,9 +151,8 @@ class StatusDashboard(QFrame):
             )
             button.setFixedWidth(76)
             self._pt_buttons.append(button)
-            button_col.addWidget(button)
-        layout.addLayout(button_col, 0)
-        layout.addWidget(vline(), 0)
+            button_row.addWidget(button)
+        layout.addLayout(button_row, 0)
 
 
     def refresh_data(self) -> None:
