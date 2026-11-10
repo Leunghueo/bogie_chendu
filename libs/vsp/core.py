@@ -632,7 +632,7 @@ def hex2dis(data: bytes) -> float:
 
     value_bytes = data[-6:-2]
     raw_value = int.from_bytes(value_bytes, byteorder="big", signed=False)
-    ret = (raw_value - HEAD_BASE) / 4096 * 6
+    ret = (raw_value - HEAD_BASE) / 4096 * 6 * 1.013
     return round(ret,2)
 
 @parser("weight")
