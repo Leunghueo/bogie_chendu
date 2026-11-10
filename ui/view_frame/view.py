@@ -279,6 +279,11 @@ class Window(QMainWindow):
         # footer_layout.addWidget(self.ai_status_label)
         footer_layout.addWidget(self.fault_label, 1)
 
+        # 循环次数常驻状态栏(故障信息旁): 数据取当前 workflow.flags, 不在循环内时为空
+        self.loop_label = QLabel("", self.footer)
+        self.loop_label.setObjectName("statusText")
+        footer_layout.addWidget(self.loop_label)
+
         # self.plc_dialog_button = QToolButton(self.footer)
         # self.plc_dialog_button.setObjectName("footerActionButton")
         # self.plc_dialog_button.setToolButtonStyle(Qt.ToolButtonTextOnly)
@@ -450,6 +455,19 @@ class Window(QMainWindow):
 
         # self.ai_status_label.setText("AI服务在线" if self._ai_ready else "AI服务离线")
         self.fault_label.setText(f"故障信息: {self._fault_message}")
+
+        # 循环进度: flags 的“循环计数”为已完成轮数, 展示当前轮 = 计数+1; 不在循环内(flags 已清)显示空
+        loop_text = ""
+        workflow = self.runtime.get("wf")
+        flags = getattr(workflow, "flags", None) if workflow is not None else None
+        if isinstance(flags, dict):
+            total = flags.get("循环次数")
+            if total:
+                try:
+                    loop_text = f"循环次数: {int(flags.get('循环计数') or 0) + 1}/{int(total)}"
+                except (TypeError, ValueError):
+                    loop_text = ""
+        self.loop_label.setText(loop_text)
 
     def _refresh_runtime_status(self) -> None:
         self._plc_ready = bool(getattr(self.runtime.get("plc"), "is_connected", lambda: False)())

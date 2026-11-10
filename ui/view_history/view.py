@@ -621,7 +621,7 @@ class Window(QWidget):
         """
         from PySide6.QtWidgets import QDialog, QMessageBox
 
-        from ui.dialog_result.view import ResultDialog
+        from ui.dialog_result.view import ResultDialog, air_trial_curves
 
         selected = self.log_table.selectedItems()
         if not selected:
@@ -653,11 +653,16 @@ class Window(QWidget):
             QMessageBox.warning(self, "提示", "该作业中没有可编辑的结果数据")
             return
 
+        job_data = job.get("data") if isinstance(job.get("data"), dict) else {}
         dialog = ResultDialog(
             items,
             self,
             result_store=result_data,
             checker=str(meta.get("互检员") or ""),
+            curves=air_trial_curves(
+                air_curve=job.get("air_curve"),
+                process_data=job_data.get("过程数据"),
+            ),
         )
         dialog.setWindowTitle("补录数据")
         if dialog.exec() != QDialog.DialogCode.Accepted:

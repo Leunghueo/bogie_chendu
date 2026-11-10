@@ -9,14 +9,53 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
+    QWidget,
 )
+
+try:
+    import pyqtgraph as pg
+except Exception:  # pyqtgraph 不可用时曲线区一律显示“暂无数据”, 不阻断结果查看
+    pg = None
+
+#: 结果页下方曲线区展示的三个空气试验 (顺序即展示顺序)
+AIR_TRIALS = ("空簧保压", "差压1->2", "差压2->1")
+
+
+def air_trial_curves(
+    *,
+    air_curve: dict | None = None,
+    process_data: dict | None = None,
+) -> dict[str, tuple[list, list] | None]:
+    """组装三试验曲线数据: {试验名: (气压1序列, 气压2序列) 或 None}.
+
+    空簧保压的序列优先取作业的 air_curve 快照列, 其次取过程数据;
+    差压1->2 / 差压2->1 目前没有任何记录序列 (空气页只记录空簧保压),
+    恒为 None, 结果页对应区块显示“暂无数据”.
+    """
+
+    def _pair(source: object) -> tuple[list, list] | None:
+        if not isinstance(source, dict):
+            return None
+        p1 = source.get("空簧气压1") or []
+        p2 = source.get("空簧气压2") or []
+        if p1 or p2:
+            return (list(p1), list(p2))
+        return None
+
+    return {
+        "空簧保压": _pair(air_curve) or _pair(process_data),
+        "差压1->2": None,
+        "差压2->1": None,
+    }
 
 
 class ResultTable(QTableWidget):
@@ -228,6 +267,7 @@ class ResultDialog(QDialog):
         checker: str | None = None,
         read_only: bool = False,
         refresh_callback=None,
+        curves: dict | None = None,
     ) -> None:
         """
         初始化试验结果对话框
@@ -239,10 +279,12 @@ class ResultDialog(QDialog):
                 并且不再触碰 runtime 中的当前 workflow (用于历史记录补录); 为 None 时
                 沿用原有行为, 写回 get_runtime()["wf"].data["结果数据"]
             checker: 补录模式下互检员的初始值; 为 None 时从 runtime 当前 workflow.meta 读取
+            curves: 三试验曲线数据 (air_trial_curves 的返回值); 为 None 时实时模式
+                从当前 workflow 的过程数据推导, 补录模式则一律显示暂无数据
         """
         super().__init__(parent)
         self.setWindowTitle("试验结果")
-        self.setMinimumSize(900, 650)
+        self.setMinimumSize(1000, 780)
         # 补录模式: 结果写回外部仓库而非运行中的 workflow
         self._result_store: dict | None = result_store
         self._checker_init: str | None = checker
@@ -251,6 +293,9 @@ class ResultDialog(QDialog):
         # refresh_callback 提供时显示刷新按钮, 回调返回最新 items 或 None
         self._read_only = read_only
         self._refresh_callback = refresh_callback
+        # 曲线区数据: 显式传入优先, 推导规则见 _resolve_curves
+        self._curves_arg = curves
+        self._curve_plots: dict[str, object] = {}
         self._build_ui(test_result)
 
     def _build_ui(self, test_result: list) -> None:
@@ -299,7 +344,20 @@ class ResultDialog(QDialog):
         # 填充数据
         self._populate_table(test_result)
 
-        layout.addWidget(self.table)
+        layout.addWidget(self.table, 1)
+
+        # 气压曲线区: 三个空气试验各一图, 无数据时显示“暂无数据”
+        layout.addWidget(QLabel("气压曲线", self))
+        self._curves_scroll = QScrollArea(self)
+        self._curves_scroll.setWidgetResizable(True)
+        self._curves_scroll.setFixedHeight(372)
+        curves_container = QWidget(self)
+        self._curves_layout = QVBoxLayout(curves_container)
+        self._curves_layout.setContentsMargins(6, 6, 6, 6)
+        self._curves_layout.setSpacing(8)
+        self._curves_scroll.setWidget(curves_container)
+        layout.addWidget(self._curves_scroll)
+        self._render_curves(self._resolve_curves())
 
         # 按钮区域
         button_layout = QHBoxLayout()
@@ -326,6 +384,80 @@ class ResultDialog(QDialog):
         self.confirm_btn.clicked.connect(lambda: self._finish(True))
         self.cancel_btn.clicked.connect(lambda: self._finish(False))
 
+    def _resolve_curves(self) -> dict:
+        """确定曲线区数据: 显式传入优先; 实时模式 (无 result_store) 从当前
+        workflow 的过程数据推导; 补录模式未传入时一律暂无数据."""
+        if self._curves_arg is not None:
+            return self._curves_arg
+        if self._result_store is None:
+            try:
+                from _runtime import get_runtime
+
+                workflow = get_runtime().get("wf")
+                data = getattr(workflow, "data", None) if workflow is not None else None
+                process = data.get("过程数据") if isinstance(data, dict) else None
+                return air_trial_curves(process_data=process)
+            except Exception:
+                return air_trial_curves()
+        return air_trial_curves()
+
+    def _render_curves(self, curves) -> None:
+        """(重)建三试验曲线区: 有序列画双线图, 无序列显示“暂无数据”."""
+        while self._curves_layout.count():
+            item = self._curves_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        self._curve_plots = {}
+        curves = curves if isinstance(curves, dict) else {}
+        for title in AIR_TRIALS:
+            self._curves_layout.addWidget(self._make_curve_section(title, curves.get(title)))
+        self._curves_layout.addStretch(1)
+
+    def _make_curve_section(self, title: str, pair) -> QFrame:
+        box = QFrame(self)
+        box.setFrameShape(QFrame.Shape.StyledPanel)
+        lay = QVBoxLayout(box)
+        lay.setContentsMargins(8, 6, 8, 6)
+        lay.setSpacing(4)
+        head = QLabel(title, box)
+        head.setStyleSheet("font-weight: 700;")
+        lay.addWidget(head)
+        plot = None
+        if pair is not None and pg is not None:
+            try:
+                plot = self._make_curve_plot(pair)
+            except Exception:
+                plot = None
+        if plot is None:
+            empty = QLabel("暂无数据", box)
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            empty.setMinimumHeight(60)
+            lay.addWidget(empty)
+        else:
+            lay.addWidget(plot)
+        self._curve_plots[title] = plot
+        return box
+
+    def _make_curve_plot(self, pair):
+        """两路气压序列绘成静态曲线: 横轴为采样序号 (空气页 1 秒一点, 即秒)."""
+        p1, p2 = pair
+        plot = pg.PlotWidget()
+        plot.setFixedHeight(110)
+        plot.showGrid(x=True, y=True, alpha=0.3)
+        plot.setLabel("bottom", "时间（秒）")
+        plot.setLabel("left", "气压（kPa）")
+        plot.addLegend(offset=(10, 10))
+        for series, color, name in ((p1, "#4da3ff", "气压1"), (p2, "#ffb84d", "气压2")):
+            ys: list[float] = []
+            for value in series or []:
+                try:
+                    ys.append(float(value))
+                except (TypeError, ValueError):
+                    ys.append(float("nan"))
+            if ys:
+                plot.plot(list(range(len(ys))), ys, pen=pg.mkPen(color, width=2), name=name)
+        return plot
     def _load_checker_candidates(self) -> None:
         """加载互检员候选: 用户数据库(TblUser)用户名, 首项为空.
 
@@ -433,10 +565,18 @@ class ResultDialog(QDialog):
         }
 
     def _on_refresh(self) -> None:
-        """只读模式刷新: 向回调重拉最新 items 整表重填; 回调返回 None 则保持现状."""
+        """只读快照刷新: 回调返回最新 items 时整表重填; 返回 (items, curves)
+        元组时曲线区一并重绘; 返回 None 表示暂无新数据, 保持现状."""
         if self._refresh_callback is None:
             return
-        items = self._refresh_callback()
+        result = self._refresh_callback()
+        if result is None:
+            return
+        if isinstance(result, tuple):
+            items, curves = result
+            self._render_curves(curves)
+        else:
+            items = result
         if items is None:
             return
         self.table.setRowCount(0)
