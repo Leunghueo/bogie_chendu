@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from _runtime import get_runtime
-from ui.controls import PtButton, PtLed
+from ui.controls import PtButton, PtLed, PtToggle
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +160,6 @@ class StatusDashboard(QFrame):
             button_col.addWidget(button)
         layout.addLayout(button_col, 0)
         layout.addWidget(vline(), 0)
-
 
         # 紧急停止按钮
         self._emergency_btn = QPushButton("紧急停止", self)
