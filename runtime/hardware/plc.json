@@ -2296,6 +2296,16 @@
       "desc": "无",
       "show": true
     },
+    "允许手动操作": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "64.10",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
     "1位称重单元横向移动启动信号": {
       "io": "o",
       "type": "BOOL",
