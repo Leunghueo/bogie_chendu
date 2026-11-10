@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QPushButton,
-    QScrollArea,
+    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -349,19 +349,23 @@ class ResultDialog(QDialog):
         # 填充数据
         self._populate_table(test_result)
 
-        layout.addWidget(self.table, 1)
+        # 数据与三试验曲线分 tab 展示: 表格一页, 每试验一页, 图占满页签不再压缩;
+        # 互检员与按钮区在 tab 之外常驻 (见下方按钮区域)
+        self._tabs = QTabWidget(self)
+        data_page = QWidget(self)
+        data_layout = QVBoxLayout(data_page)
+        data_layout.setContentsMargins(0, 0, 0, 0)
+        data_layout.addWidget(self.table)
+        self._tabs.addTab(data_page, "数据")
+        self._curve_pages: dict[str, QVBoxLayout] = {}
+        for title in AIR_TRIALS:
+            page = QWidget(self)
+            page_layout = QVBoxLayout(page)
+            page_layout.setContentsMargins(6, 6, 6, 6)
+            self._curve_pages[title] = page_layout
+            self._tabs.addTab(page, title)
+        layout.addWidget(self._tabs, 1)
 
-        # 气压曲线区: 三个空气试验各一图, 无数据时显示“暂无数据”
-        layout.addWidget(QLabel("气压曲线", self))
-        self._curves_scroll = QScrollArea(self)
-        self._curves_scroll.setWidgetResizable(True)
-        self._curves_scroll.setFixedHeight(372)
-        curves_container = QWidget(self)
-        self._curves_layout = QVBoxLayout(curves_container)
-        self._curves_layout.setContentsMargins(6, 6, 6, 6)
-        self._curves_layout.setSpacing(8)
-        self._curves_scroll.setWidget(curves_container)
-        layout.addWidget(self._curves_scroll)
         self._render_curves(self._resolve_curves())
 
         # 按钮区域
@@ -410,48 +414,37 @@ class ResultDialog(QDialog):
         return air_trial_curves()
 
     def _render_curves(self, curves) -> None:
-        """(重)建三试验曲线区: 有序列画双线图, 无序列显示“暂无数据”."""
-        while self._curves_layout.count():
-            item = self._curves_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
-        self._curve_plots = {}
+        """(重)建三试验曲线页签: 有序列画双线图 (占满整个页签), 无序列显示“暂无数据”."""
         curves = curves if isinstance(curves, dict) else {}
+        self._curve_plots = {}
         for title in AIR_TRIALS:
-            self._curves_layout.addWidget(self._make_curve_section(title, curves.get(title)))
-        self._curves_layout.addStretch(1)
-
-    def _make_curve_section(self, title: str, pair) -> QFrame:
-        box = QFrame(self)
-        box.setFrameShape(QFrame.Shape.StyledPanel)
-        lay = QVBoxLayout(box)
-        lay.setContentsMargins(8, 6, 8, 6)
-        lay.setSpacing(4)
-        head = QLabel(title, box)
-        head.setStyleSheet("font-weight: 700;")
-        lay.addWidget(head)
-        plot = None
-        if pair is not None and pg is not None:
-            try:
-                plot = self._make_curve_plot(pair)
-            except Exception:
-                plot = None
-        if plot is None:
-            empty = QLabel("暂无数据", box)
-            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            empty.setMinimumHeight(60)
-            lay.addWidget(empty)
-        else:
-            lay.addWidget(plot)
-        self._curve_plots[title] = plot
-        return box
+            page_layout = self._curve_pages[title]
+            while page_layout.count():
+                item = page_layout.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
+            pair = curves.get(title)
+            plot = None
+            if pair is not None and pg is not None:
+                try:
+                    plot = self._make_curve_plot(pair)
+                except Exception:
+                    plot = None
+            if plot is None:
+                empty = QLabel("暂无数据")
+                empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                page_layout.addWidget(empty, 1)
+            else:
+                page_layout.addWidget(plot, 1)
+            self._curve_plots[title] = plot
 
     def _make_curve_plot(self, pair):
-        """两路气压序列绘成静态曲线: 横轴为采样序号 (空气页 1 秒一点, 即秒)."""
+        """两路气压序列绘成静态曲线: 横轴为采样序号 (空气页 1 秒一点, 即秒).
+
+        界面展示用 pyqtgraph 默认黑底 (打印用白底图在历史页导出时另行渲染)."""
         p1, p2 = pair
         plot = pg.PlotWidget()
-        plot.setFixedHeight(110)
         plot.showGrid(x=True, y=True, alpha=0.3)
         plot.setLabel("bottom", "时间（秒）")
         plot.setLabel("left", "气压（kPa）")
@@ -466,6 +459,7 @@ class ResultDialog(QDialog):
             if ys:
                 plot.plot(list(range(len(ys))), ys, pen=pg.mkPen(color, width=2), name=name)
         return plot
+
     def reject(self) -> None:
         """实时模式屏蔽 Esc/系统关闭引发的 reject (见 __init__ 的 _live_mode 说明)."""
         if self._live_mode:
