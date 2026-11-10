@@ -102,6 +102,9 @@ class Window(QWidget):
         # 预览绘图的时间零点: 页面清空后第一笔有效读数的时刻; 与试验记录
         # 开关 (_enabled) 解耦, 充气阶段也能实时看到气压曲线
         self._preview_start: float | None = None
+        # 绘图停止标志: 试验结束信号 (enable=false) 后置 True, 停记录的同时
+        # 曲线也冻结在结束时刻; 清空页面或下一轮 enable 时复位, 预览重新开始
+        self._plot_stopped = False
         self._starts: dict[str, tuple[float, float]] = {}
         self._ends: dict[str, tuple[float, float]] = {}
         self._load_start: dict[str, float | None] = {}
@@ -294,6 +297,7 @@ class Window(QWidget):
         self._workflow_id = None
         self._capture_start = 0.0
         self._preview_start = None
+        self._plot_stopped = False
         self._starts.clear()
         self._ends.clear()
         self._load_start.clear()
@@ -324,6 +328,7 @@ class Window(QWidget):
         enabled = payload.get("enabled") is True
         if enabled:
             self._enabled = True
+            self._plot_stopped = False
             # _capture_start 只是自动停止的判定锚点 (自开启时刻计时);
             # 绘图零点是 _preview_start, 开启试验不再清图, 曲线保持连续
             self._capture_start = time.monotonic()
@@ -359,6 +364,9 @@ class Window(QWidget):
         self._refresh()
         if not enabled:
             self._enabled = False
+            # 试验结束: 停记录的同时停绘图, 曲线冻结在结束时刻 (末态点已由
+            # 上方 _refresh 画完); 下一轮 clear_page / enable 时自动恢复
+            self._plot_stopped = True
             # 关闭后熄灭高亮: _update_card_states 在 _enabled=False 时不再点亮任何卡片
             self._update_card_states()
 
@@ -402,11 +410,13 @@ class Window(QWidget):
             self._auto_stop_at = None
             self._auto_stop_checked = False
             self._preview_start = None
+            self._plot_stopped = False
             self._chart.clear(900)
             self._update_card_states()
         state = getattr(getattr(workflow, "state", None), "value", None)
         if state in ("stopped", "done", "error"):
             self._enabled = False
+            self._plot_stopped = True  # 流程已终止: 与停记录一致, 曲线一并冻结
         trial = self._trial_type
         if workflow is None:
             info = "未开始"
@@ -427,10 +437,12 @@ class Window(QWidget):
         if all(value is not None for value in readings):
             self._latest = readings[0], readings[1]
             # 预览绘图与记录开关解耦: 清空后只要有有效读数就持续画,
-            # 充气阶段的气压爬升也能实时看到
-            if self._preview_start is None:
-                self._preview_start = time.monotonic()
-            self._chart.append_data(time.monotonic() - self._preview_start, *self._latest)
+            # 充气阶段的气压爬升也能实时看到; 但试验结束信号停记录后
+            # _plot_stopped 置位, 曲线冻结在结束时刻, 不再续画
+            if not self._plot_stopped:
+                if self._preview_start is None:
+                    self._preview_start = time.monotonic()
+                self._chart.append_data(time.monotonic() - self._preview_start, *self._latest)
             if self._enabled and self._trial_type == "空簧保压":
                 # 采样值写入工作流过程数据 (差压试验不记录)
                 process = self._process_data()

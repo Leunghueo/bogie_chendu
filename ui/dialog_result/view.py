@@ -26,10 +26,11 @@ class ResultTable(QTableWidget):
         super().__init__(*args, **kwargs)
         # TAB 值 -> 行号 映射, 由 ResultDialog 填充表格后建立
         self.tab_rows: dict[int, int] = {}
+        self.read_only: bool = False  # 只读模式下回车不进入编辑 (由 ResultDialog 设置)
 
     def keyPressEvent(self, event) -> None:
         """回车: 按当前行 TAB 值找到下一个轮换行, 激活其测量值并进入编辑"""
-        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+        if not self.read_only and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             current = self.currentRow()
             # 当前行 TAB 值; 不在轮换表中(或 TAB=-1)则从 0 开始
             cur_tab = next(
@@ -225,6 +226,8 @@ class ResultDialog(QDialog):
         parent=None,
         result_store: dict | None = None,
         checker: str | None = None,
+        read_only: bool = False,
+        refresh_callback=None,
     ) -> None:
         """
         初始化试验结果对话框
@@ -244,6 +247,10 @@ class ResultDialog(QDialog):
         self._result_store: dict | None = result_store
         self._checker_init: str | None = checker
         self.checker: str = checker or ""
+        # 只读查看模式 (如执行中快照): 表格不可编辑, 确认不写回;
+        # refresh_callback 提供时显示刷新按钮, 回调返回最新 items 或 None
+        self._read_only = read_only
+        self._refresh_callback = refresh_callback
         self._build_ui(test_result)
 
     def _build_ui(self, test_result: list) -> None:
@@ -257,6 +264,7 @@ class ResultDialog(QDialog):
         self.checker_combo.setEditable(False)
         self.checker_combo.setMinimumWidth(200)
         self._load_checker_candidates()
+        self.checker_combo.setEnabled(not self._read_only)
         checker_row.addWidget(self.checker_combo)
         checker_row.addStretch()
         layout.addLayout(checker_row)
@@ -268,10 +276,14 @@ class ResultDialog(QDialog):
         ])
         # 告知表格"测量值"列索引, 供回车轮换定位
         self.table._dialog_col_std = self.COL_STD
+        self.table.read_only = self._read_only
         # 只允许编辑测量值、最小值、最大值列
-        self.table.setEditTriggers(
-            QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.EditKeyPressed
-        )
+        if self._read_only:
+            self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        else:
+            self.table.setEditTriggers(
+                QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.EditKeyPressed
+            )
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setAlternatingRowColors(True)
 
@@ -295,6 +307,14 @@ class ResultDialog(QDialog):
         self.confirm_btn = QPushButton("确认", self)
         self.confirm_btn.setDefault(True)
         self.cancel_btn = QPushButton("取消", self)
+
+        if self._read_only:
+            self.confirm_btn.hide()
+            self.cancel_btn.setText("关闭")
+            if self._refresh_callback is not None:
+                self.refresh_btn = QPushButton("刷新", self)
+                self.refresh_btn.clicked.connect(self._on_refresh)
+                button_layout.addWidget(self.refresh_btn)
 
         button_layout.addStretch()
         button_layout.addWidget(self.confirm_btn)
@@ -397,6 +417,9 @@ class ResultDialog(QDialog):
                 result_item = QTableWidgetItem(item_data.get("结论", "-"))
                 result_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 result_item.setFlags(result_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                if self._read_only:
+                    for _cell in (std_item, min_item, max_item):
+                        _cell.setFlags(_cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 self._apply_result_color(result_item, item_data.get("结论", "-"))
                 self.table.setItem(row, self.COL_RESULT, result_item)
         finally:
@@ -408,6 +431,16 @@ class ResultDialog(QDialog):
             for row, (_, item_data) in enumerate(test_result)
             if isinstance(item_data.get("TAB"), int) and item_data["TAB"] >= 0
         }
+
+    def _on_refresh(self) -> None:
+        """只读模式刷新: 向回调重拉最新 items 整表重填; 回调返回 None 则保持现状."""
+        if self._refresh_callback is None:
+            return
+        items = self._refresh_callback()
+        if items is None:
+            return
+        self.table.setRowCount(0)
+        self._populate_table(items)
 
     @Slot(QTableWidgetItem)
     def _on_item_changed(self, item: QTableWidgetItem) -> None:
@@ -570,8 +603,8 @@ class ResultDialog(QDialog):
 
     def _finish(self, result: bool) -> None:
         """完成对话框"""
-        if result:
-            # 用户点击"确认"时, 反写表格编辑数据到 workflow.data["结果数据"]
+        if result and not self._read_only:
+            # 用户点击"确认"时, 反写表格编辑数据到 workflow.data["结果数据"] (只读模式不写回)
             self._sync_table_to_workflow()
             # 互检员写入 workflow.meta, 并以独立事件落盘供导出PDF读取
             self._sync_checker_to_workflow()
