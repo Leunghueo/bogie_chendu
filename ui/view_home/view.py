@@ -129,9 +129,15 @@ class WaitCountdownDialog(QDialog):
         layout.addStretch(1)
         layout.addWidget(self._countdown_label)
 
+        button_row = QHBoxLayout()
         self._cancel_button = QPushButton("跳过等待", self)
         self._cancel_button.setMinimumHeight(44)
-        layout.addWidget(self._cancel_button)
+        button_row.addWidget(self._cancel_button)
+        # 中断等待: 退出倒计时并触发"中断试验" (排气泄压后跳回选择节点)
+        self._interrupt_button = QPushButton("中断等待", self)
+        self._interrupt_button.setMinimumHeight(44)
+        button_row.addWidget(self._interrupt_button)
+        layout.addLayout(button_row)
         layout.addStretch(1)
         self._cancel_button.hide()
 
@@ -141,6 +147,9 @@ class WaitCountdownDialog(QDialog):
 
     def set_skip_handler(self, handler) -> None:
         self._cancel_button.clicked.connect(handler)
+
+    def set_interrupt_handler(self, handler) -> None:
+        self._interrupt_button.clicked.connect(handler)
 
     def _render_countdown(self) -> None:
         self._countdown_label.setText(str(max(0, self._remaining_seconds)))
@@ -752,6 +761,14 @@ class CreateJobConfirmDialog(QDialog):
         )
 
 
+class _LoopCountDialog(QInputDialog):
+    """循环次数输入弹窗: 屏蔽取消按钮与标题栏关闭, 只能输入后确认;
+    退出流程走主页"中断试验"."""
+
+    def reject(self) -> None:
+        pass
+
+
 class WorkflowRuntimePanel(QWidget):
     state_changed = Signal(str, str)
     running_changed = Signal(bool)
@@ -914,6 +931,37 @@ class WorkflowRuntimePanel(QWidget):
         self.state_label.setText("状态: stopping")
         self.runner.stop()
 
+    def interrupt_workflow(self) -> None:
+        """中断试验: 排气泄压后跳回选择节点重选支路, 流程本身不停止.
+
+        两种情形先弹确认框: 常规中断提示"退回到贴合状态"; 已停在选择弹窗、
+        流程没有 select 节点、或上一次重定向尚在排气泄压中时, 中断无处可跳,
+        提示"终止该试验", 确认后走真停止."""
+        workflow = self.workflow
+        if workflow is None or not self.is_running():
+            return
+        runner = self.runner
+        select_pending = runner is not None and getattr(runner, "_pending_select_payload", None) is not None
+        has_select = any(node.node_type == "select" for node in workflow.nodes.values())
+        if select_pending or not has_select or workflow._redirect_in_progress:
+            reply = QMessageBox.question(
+                self, "中断试验", "该操作会终止该试验",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+            self.stop_workflow()
+            return
+        reply = QMessageBox.question(
+            self, "中断试验", "该操作会退回到贴合状态",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        logger.info("试验流程中断: 排气泄压后跳回选择节点")
+        self.state_label.setText("状态: 正在排气泄压…")
+        workflow.request_redirect()
+
     def shutdown(self, timeout_ms: int = 3000) -> None:
         self._close_wait_dialog()
         self._close_select_dialog()
@@ -1061,6 +1109,7 @@ class WorkflowRuntimePanel(QWidget):
         if self.runner is None:
             return
         del node_id
+        self.state_label.setText(f"状态: {WorkflowState.RUNNING.value}")
         self._close_select_dialog()
         dialog = SelectBranchDialog(node_name, choices, self)
         self._select_dialog = dialog
@@ -1088,7 +1137,7 @@ class WorkflowRuntimePanel(QWidget):
         if self.runner is None:
             return
         self._close_loop_dialog()
-        dialog = QInputDialog(self)
+        dialog = _LoopCountDialog(self)
         self._loop_dialog = dialog
         dialog.setWindowTitle("输入循环次数")
         dialog.setLabelText(f"{node_name} ({node_id})\n请输入循环次数")
@@ -1096,6 +1145,7 @@ class WorkflowRuntimePanel(QWidget):
         dialog.setIntRange(1, 9999)
         dialog.setIntStep(1)
         dialog.setIntValue(1)
+        dialog.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, False)
         dialog.setModal(False)
         dialog.setWindowModality(Qt.WindowModality.NonModal)
 
@@ -1161,6 +1211,7 @@ class WorkflowRuntimePanel(QWidget):
         self._close_wait_dialog()
         self._wait_dialog = WaitCountdownDialog(wait_seconds, self)
         self._wait_dialog.set_skip_handler(self._skip_wait_dialog)
+        self._wait_dialog.set_interrupt_handler(self.interrupt_workflow)
         self._wait_dialog.finished.connect(self._handle_wait_dialog_finished)
         self._wait_dialog.show()
         self._wait_dialog.raise_()
@@ -1547,12 +1598,12 @@ class Window(QWidget):
         layout.addWidget(self.workflow_list, 1)
         run_row = QHBoxLayout()
         self.start_flow_btn = QPushButton("开始试验", panel)
-        self.stop_flow_btn = QPushButton("停止试验", panel)
+        self.stop_flow_btn = QPushButton("中断试验", panel)
         self.select_cmd_btn = QPushButton("选择指令", panel)
         self.stop_flow_btn.setEnabled(False)
         self.select_cmd_btn.setEnabled(False)
         self.start_flow_btn.clicked.connect(self._start_workflow)
-        self.stop_flow_btn.clicked.connect(self._stop_workflow)
+        self.stop_flow_btn.clicked.connect(self._interrupt_workflow)
         self.select_cmd_btn.clicked.connect(self._reopen_selection)
         run_row.addWidget(self.start_flow_btn)
         run_row.addWidget(self.stop_flow_btn)
@@ -2385,6 +2436,9 @@ class Window(QWidget):
 
     def _stop_workflow(self) -> None:
         self.workflow_panel.stop_workflow()
+
+    def _interrupt_workflow(self) -> None:
+        self.workflow_panel.interrupt_workflow()
 
     def _reopen_selection(self) -> None:
         runner = self.workflow_panel.runner

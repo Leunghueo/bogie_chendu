@@ -296,6 +296,11 @@ class ResultDialog(QDialog):
         # 曲线区数据: 显式传入优先, 推导规则见 _resolve_curves
         self._curves_arg = curves
         self._curve_plots: dict[str, object] = {}
+        # 实时模式 (流程内等待确认: 无 result_store 且非只读): 取消/关闭会让流程
+        # 收到未确认而停止, 故屏蔽取消按钮、标题栏 X 与 Esc; 退出走主页"中断试验"
+        self._live_mode = result_store is None and not read_only
+        if self._live_mode:
+            self.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, False)
         self._build_ui(test_result)
 
     def _build_ui(self, test_result: list) -> None:
@@ -373,6 +378,9 @@ class ResultDialog(QDialog):
                 self.refresh_btn = QPushButton("刷新", self)
                 self.refresh_btn.clicked.connect(self._on_refresh)
                 button_layout.addWidget(self.refresh_btn)
+
+        if self._live_mode:
+            self.cancel_btn.hide()
 
         button_layout.addStretch()
         button_layout.addWidget(self.confirm_btn)
@@ -458,6 +466,12 @@ class ResultDialog(QDialog):
             if ys:
                 plot.plot(list(range(len(ys))), ys, pen=pg.mkPen(color, width=2), name=name)
         return plot
+    def reject(self) -> None:
+        """实时模式屏蔽 Esc/系统关闭引发的 reject (见 __init__ 的 _live_mode 说明)."""
+        if self._live_mode:
+            return
+        super().reject()
+
     def _load_checker_candidates(self) -> None:
         """加载互检员候选: 用户数据库(TblUser)用户名, 首项为空.
 
