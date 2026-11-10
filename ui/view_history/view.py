@@ -12,6 +12,7 @@ from typing import Any
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -376,6 +377,12 @@ class Window(QWidget):
         self.print_button.clicked.connect(self._on_print)
         button_row.addWidget(self.print_button)
 
+        # 报告是否附带空簧试验曲线页 (导出与打印共用 _build_report_pdf, 同受此开关);
+        # 默认勾选 = 保持原行为 (有曲线数据就附页)
+        self.curve_checkbox = QCheckBox("导出空簧试验曲线", panel)
+        self.curve_checkbox.setChecked(True)
+        button_row.addWidget(self.curve_checkbox)
+
         button_row.addStretch()
         layout.addLayout(button_row)
 
@@ -546,8 +553,8 @@ class Window(QWidget):
         pdf_handler = self.runtime["pdf_report"]
         pdf_handler.load_template()
         pdf_handler.set_cells(maps)
-        # 空簧保压曲线单独成页 (有曲线数据时才加; 失败不阻断报告导出)
-        chart_png = _render_air_curve_png(job)
+        # 空簧保压曲线单独成页 (勾选导出曲线且有曲线数据时才加; 失败不阻断报告导出)
+        chart_png = _render_air_curve_png(job) if self.curve_checkbox.isChecked() else None
         if chart_png is not None:
             try:
                 pdf_handler.add_image_sheet(chart_png, "气压曲线")
