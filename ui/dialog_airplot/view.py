@@ -108,6 +108,8 @@ class Window(QWidget):
         self._starts: dict[str, tuple[float, float]] = {}
         self._ends: dict[str, tuple[float, float]] = {}
         self._load_start: dict[str, float | None] = {}
+        # 加载数据卡已在界面上注释隐藏, _load_labels 恒为空字典; _refresh 的写入均经 .get 守卫
+        self._load_labels: dict[str, QLabel] = {}
         self._latest: tuple[float, float] | None = None
         self._auto_stop_at: float | None = None  # 本轮判定时刻 (秒), None 表示不判定
         self._auto_stop_checked = False  # 本轮是否已做过那一次判定 (落闩后不再判)
@@ -430,8 +432,12 @@ class Window(QWidget):
         self._status_label.setText(f"当前试验：{info}")
         values = self._read_values(self.LOAD_KEYS)
         for index, value in enumerate(values):
-            self._load_labels[f"当前加载数据:{index}"].setText(self._text(value))
-            self._load_labels[f"试验前加载数据:{index}"].setText(self._text(self._load_start.get(self.LOAD_KEYS[index])))
+            current_label = self._load_labels.get(f"当前加载数据:{index}")
+            if current_label is not None:
+                current_label.setText(self._text(value))
+            start_label = self._load_labels.get(f"试验前加载数据:{index}")
+            if start_label is not None:
+                start_label.setText(self._text(self._load_start.get(self.LOAD_KEYS[index])))
 
         readings = self._read_values(self.PRESSURE_KEYS)
         if all(value is not None for value in readings):

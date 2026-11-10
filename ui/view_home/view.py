@@ -43,7 +43,7 @@ from libs import jobstore
 from wf import NodeStoppedError, WorkflowState
 from wf.base import utc_now
 from ui.dialog_confirm.view import ConfirmDialog
-from ui.dialog_result.view import ResultDialog
+from ui.dialog_result.view import ResultDialog, air_trial_curves
 from ui.wgt_gflow.view import FlowGraph
 
 
@@ -133,7 +133,16 @@ class WaitCountdownDialog(QDialog):
         self._cancel_button.setMinimumHeight(44)
         layout.addWidget(self._cancel_button)
         layout.addStretch(1)
+<<<<<<< HEAD
         self._cancel_button.hide()
+=======
+        # “跳过等待”按钮显隐由 app.ini 的 [ui] enable_skip 控制(缺失/非法按 false 隐藏, 改后重启生效)
+        try:
+            show_skip = self.runtime["config"].getboolean("ui", "enable_skip", fallback=False)
+        except Exception:
+            show_skip = False
+        self._cancel_button.setVisible(bool(show_skip))
+>>>>>>> ee0185bae454c2ef58dc3abae9d4e4774db74fcd
 
         self.wait_event.connect(self._apply_wait_payload)
         self._render_countdown()
@@ -804,8 +813,6 @@ class WorkflowRuntimePanel(QWidget):
         status_row.setSpacing(4)
         self.state_label = QLabel("状态: idle", self)
         status_row.addWidget(self.state_label)
-        self.loop_label = QLabel("", self)
-        status_row.addWidget(self.loop_label)
         status_row.addStretch(1)
         if self.show_data:
             self.data_toggle_btn = QToolButton(self)
@@ -868,7 +875,6 @@ class WorkflowRuntimePanel(QWidget):
 
     def set_workflow_instance(self, workflow = None) -> None:
         self.workflow = workflow
-        self.loop_label.setText("")
         if not self.is_running():
             self._restore_workflow_runtime()
 
@@ -1025,17 +1031,7 @@ class WorkflowRuntimePanel(QWidget):
         self._render_data_text()
         self._persist_runtime_state()
 
-    def _refresh_loop_label(self) -> None:
-        flags = getattr(self.workflow, "flags", None)
-        total = flags.get("循环次数") if isinstance(flags, dict) else None
-        if not total:
-            self.loop_label.setText("")
-            return
-        current = flags.get("循环计数") or 0
-        self.loop_label.setText(f"当前循环次数 {int(current) + 1}/{int(total)}")
-
     def _handle_node_begin(self, payload: dict[str, object]) -> None:
-        self._refresh_loop_label()
         node_type = str(payload.get("node_type") or "").strip()
         node_args = payload.get("node_args")
         node_name = str(payload.get("node_name", ""))
@@ -1275,8 +1271,6 @@ class WorkflowRuntimePanel(QWidget):
         self._state = state
         self._error_message = error_message
         self.state_label.setText(f"状态: {state}")
-        if state != WorkflowState.RUNNING.value:
-            self.loop_label.setText("")
         self.state_changed.emit(state, error_message)
         if error_message:
             logger.error(f"workflow execution failed: %s", error_message)
@@ -2152,6 +2146,15 @@ class Window(QWidget):
             return copy.deepcopy(stored)
         return None
 
+    def _running_job_process_data(self, job_id: str):
+        """运行中工单的过程数据 (内存现状深拷贝); 非运行工单/不匹配返回 None."""
+        panel = self.workflow_panel
+        workflow = getattr(panel, "workflow", None)
+        if workflow is None or getattr(workflow, "id", None) != job_id or not panel.is_running():
+            return None
+        data = getattr(workflow, "data", None)
+        process = data.get("过程数据") if isinstance(data, dict) else None
+        return copy.deepcopy(process) if isinstance(process, dict) else None
     def _show_job_result(self, job_id: str, *, view_only: bool = False) -> None:
         """弹出 dialog_result 显示该任务当前的结果数据 (作业库 summary 字段).
 
@@ -2176,14 +2179,27 @@ class Window(QWidget):
         if not result_data:
             result_data = self._job_result_template(job)
         refresh_callback = None
+        job_data = job.get("data") if isinstance(job.get("data"), dict) else {}
+        job_curves = air_trial_curves(
+            air_curve=job.get("air_curve"),
+            process_data=job_data.get("过程数据"),
+        )
         if view_only:
             live = self._running_job_result_data(job_id)
             if live is not None:
                 result_data = live
+                live_process = self._running_job_process_data(job_id)
+                if live_process is not None:
+                    job_curves = air_trial_curves(process_data=live_process)
 
                 def refresh_callback():
                     fresh = self._running_job_result_data(job_id)
-                    return self._result_items(fresh) if fresh is not None else None
+                    if fresh is None:
+                        return None
+                    return (
+                        self._result_items(fresh),
+                        air_trial_curves(process_data=self._running_job_process_data(job_id)),
+                    )
         items = self._result_items(result_data)
         meta = dict(job.get("meta") or {})
         dialog = ResultDialog(
@@ -2193,6 +2209,7 @@ class Window(QWidget):
             checker=str(meta.get("互检员") or ""),
             read_only=view_only,
             refresh_callback=refresh_callback,
+            curves=job_curves,
         )
         title = f"结果数据 - {job.get('name') or ''}"
         dialog.setWindowTitle(title + "（执行中快照）" if view_only else title)
