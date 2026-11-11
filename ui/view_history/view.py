@@ -367,6 +367,11 @@ class Window(QWidget):
         self.upload_emis_button.clicked.connect(self._on_upload_emis)
         button_row.addWidget(self.upload_emis_button)
 
+        self.upload_isdp_button = QPushButton("上传ISDP", panel)
+        self.upload_isdp_button.setCursor(Qt.PointingHandCursor)
+        self.upload_isdp_button.clicked.connect(self._on_upload_isdp)
+        button_row.addWidget(self.upload_isdp_button)
+
         self.amend_button = QPushButton("补录数据", panel)
         self.amend_button.setCursor(Qt.PointingHandCursor)
         self.amend_button.clicked.connect(self._on_amend_data)
@@ -792,3 +797,65 @@ class Window(QWidget):
                 QMessageBox.critical(
                     self, "上传失败", f"{message}\n\n该错误已记录到当天日志"
                 )
+
+    def _on_upload_isdp(self) -> None:
+        """上传当前选中作业的 summary 数据到 ISDP.
+
+        数据完全来自作业库行, 不依赖运行中的 workflow.
+        任务编号取作业名, 试验结束时间取作业完成时间, 操作员取作业 user;
+        应答 resCode == "0" 为成功, 提示中带回 resMsg / reqId.
+        """
+        from PySide6.QtWidgets import QMessageBox
+        from libs.push.isdp import PushConfigError, isdp
+
+        selected = self.log_table.selectedItems()
+        if not selected:
+            QMessageBox.warning(self, "提示", "请先在搜索结果列表中选择一条作业记录")
+            return
+        job = self._current_job()
+        if job is None:
+            return
+        job_id = str(job.get("id") or "")
+
+        result_data = _job_result_data(job)
+        if not result_data:
+            QMessageBox.warning(self, "提示", "该作业中没有 summary 结果数据, 无法上传")
+            return
+        meta = _job_meta(job)
+
+        check_end = (
+            str(job.get("finished_at") or "")
+            or str(job.get("created_at") or "")
+            or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        )
+        operator = str(job.get("user") or meta.get("用户") or "")
+
+        try:
+            result = isdp(
+                summary=result_data,
+                meta=meta,
+                task_no=str(job.get("name") or job_id),
+                check_end=check_end,
+                operator=operator,
+            )
+            logger.info("上传 ISDP 成功: %s", job_id)
+            detail = str(result.get("resMsg") or "成功")
+            req_id = str(result.get("reqId") or "")
+            if req_id:
+                detail += f"\n请求编号: {req_id}"
+            QMessageBox.information(
+                self, "上传成功", f"数据成功上传ISDP\n服务器应答: {detail}"
+            )
+        except PushConfigError as exc:
+            # 配置问题(文件缺失/JSON 非法/缺少 isdp.token), 与网络上报失败区分开
+            logger.exception("上传 ISDP 失败(推送配置错误), 作业: %s", job_id)
+            QMessageBox.critical(
+                self,
+                "推送配置错误",
+                f"{exc}\n\n该错误已记录到当天日志",
+            )
+        except RuntimeError as exc:
+            logger.exception("上传 ISDP 失败, 作业: %s", job_id)
+            QMessageBox.critical(
+                self, "上传失败", f"{exc}\n\n该错误已记录到当天日志"
+            )
