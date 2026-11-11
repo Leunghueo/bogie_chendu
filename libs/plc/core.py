@@ -1053,7 +1053,9 @@ class PLCPointTable:
                         self.write_word(addr, 0)
                     logging.info("PLC字地址60-64已清零")
 
-                # _clear_words()
+                # 停止压磅保持
+                self.write("空气弹簧放气@完成", False)
+                time.sleep(1)
 
                 # 有气则排气
                 max_air = max(
