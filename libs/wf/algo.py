@@ -547,6 +547,12 @@ async def summary(node: "Node", workflow: "Workflow", data: Any) -> Any:
     workflow._append_workflow_log(event_name = "air_curve", extra = {
         "空簧气压1": list(process.get("空簧气压1") or []),
         "空簧气压2": list(process.get("空簧气压2") or []),
+        # 差压试验的整段气压序列 (含升压阶段), 由空气页在试验关闭时回填;
+        # EMIS 只读空簧两键, 多出的键不影响它
+        "差压1->2气压1": list(process.get("差压1->2气压1") or []),
+        "差压1->2气压2": list(process.get("差压1->2气压2") or []),
+        "差压2->1气压1": list(process.get("差压2->1气压1") or []),
+        "差压2->1气压2": list(process.get("差压2->1气压2") or []),
     })
     return None
 

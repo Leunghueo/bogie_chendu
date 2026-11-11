@@ -77,6 +77,10 @@ class ChartWidget(QWidget):
         if pg is not None and self._times[-1] > self._plot.viewRange()[0][1]:
             self._plot.setXRange(0, self._times[-1] + 1, padding=0)
 
+    def series(self) -> tuple[list[float], list[float]]:
+        """当前缓冲的两路气压序列副本 (清页以来逐拍采样, 含升压阶段)."""
+        return (list(self._pressures[0]), list(self._pressures[1]))
+
 
 class Window(QWidget):
     """流程驱动的三类气压试验状态视图。"""
@@ -84,6 +88,7 @@ class Window(QWidget):
     message_received = Signal(dict)
     page_cleared = Signal()
     TRIALS = ("空簧保压", "差压1->2", "差压2->1")
+    DIFF_TRIALS = ("差压1->2", "差压2->1")
     # 空簧保压自动停止: 试验参数中的判定时刻 (秒); 缺失/非法按默认 300, <=0 不判定
     AUTO_STOP_TIME_KEY = "空簧保压@自动停止时间"
     AUTO_STOP_LEAK_KEY = "空簧保压@自动停止压差"
@@ -105,6 +110,12 @@ class Window(QWidget):
         # 绘图停止标志: 试验结束信号 (enable=false) 后置 True, 停记录的同时
         # 曲线也冻结在结束时刻; 清空页面或下一轮 enable 时复位, 预览重新开始
         self._plot_stopped = False
+        # 差压整段回填标志: 本段图表缓冲是否已写入过程数据; 关闭信号与流程
+        # 终态各是一个回填时机, 靠它防重复; 清页 / 新一轮 enable 时复位
+        self._diff_flushed = False
+        # 本段所属 workflow 对象 (enable 时捕获): 回填的写入目标, 不随运行时
+        # workflow 指针的清除/更换而丢失
+        self._segment_workflow: Any = None
         self._starts: dict[str, tuple[float, float]] = {}
         self._ends: dict[str, tuple[float, float]] = {}
         self._load_start: dict[str, float | None] = {}
@@ -300,6 +311,8 @@ class Window(QWidget):
         self._capture_start = 0.0
         self._preview_start = None
         self._plot_stopped = False
+        self._diff_flushed = False
+        self._segment_workflow = None
         self._starts.clear()
         self._ends.clear()
         self._load_start.clear()
@@ -318,6 +331,36 @@ class Window(QWidget):
         self._status_label.setText("当前试验：未开始")
         self._update_card_states()
 
+    def _flush_diff_series(self) -> None:
+        """差压试验整段回填: 图表缓冲 (清页以来逐拍采样, 含升压阶段) 整段
+        写入过程数据, 供 summary 快照落库与结果页展示.
+
+        只搬运数据, 不参与任何判定: 差压是否合格仍由 cal_air_12/21 在试验
+        关闭后读 PLC 瞬时气压算出并判定, 记录序列 (含升压段的瞬时大压差)
+        不会干扰判定. 同一段只回填一次 (_diff_flushed 落闩).
+
+        写入目标是开启时捕获的 workflow 对象而非运行时当前 workflow:
+        流程中途终止后运行时指针可能已被清掉/换掉, 回填仍须落回本段作业."""
+        if self._diff_flushed or self._trial_type not in self.DIFF_TRIALS:
+            return
+        target = self._segment_workflow or self._current_workflow()
+        data = getattr(target, "data", None)
+        if not isinstance(data, dict):
+            return
+        p1, p2 = self._chart.series()
+        if not p1 and not p2:
+            return
+        process = data.get("过程数据")
+        if not isinstance(process, dict):
+            process = data.setdefault("过程数据", {})
+        process[f"{self._trial_type}气压1"] = p1
+        process[f"{self._trial_type}气压2"] = p2
+        self._diff_flushed = True
+        logging.info(
+            "差压试验数据回填: %s 气压1 %d 点 / 气压2 %d 点",
+            self._trial_type, len(p1), len(p2),
+        )
+
     @Slot(dict)
     def _handle_message(self, payload: dict[str, Any]) -> None:
         if not self._matches_workflow(payload):
@@ -331,6 +374,8 @@ class Window(QWidget):
         if enabled:
             self._enabled = True
             self._plot_stopped = False
+            self._diff_flushed = False
+            self._segment_workflow = self._current_workflow()
             # _capture_start 只是自动停止的判定锚点 (自开启时刻计时);
             # 绘图零点是 _preview_start, 开启试验不再清图, 曲线保持连续
             self._capture_start = time.monotonic()
@@ -365,6 +410,8 @@ class Window(QWidget):
         # 走一次完整刷新让卡片显示收尾数据(初值/收尾压/泄漏量/差压)
         self._refresh()
         if not enabled:
+            # 差压试验: 末态点已画入缓冲, 此刻整段回填过程数据 (含升压段)
+            self._flush_diff_series()
             self._enabled = False
             # 试验结束: 停记录的同时停绘图, 曲线冻结在结束时刻 (末态点已由
             # 上方 _refresh 画完); 下一轮 clear_page / enable 时自动恢复
@@ -401,6 +448,15 @@ class Window(QWidget):
 
     def _refresh(self) -> None:
         workflow = self._current_workflow()
+        # 差压段未收到关闭信号而运行时 workflow 已被清掉/换掉 (流程中途终止):
+        # 在下方复位逻辑清掉 trial 之前, 先把整段数据兜底回填到本段作业
+        if (
+            self._trial_type in self.DIFF_TRIALS
+            and not self._diff_flushed
+            and self._workflow_id
+            and str(getattr(workflow, "id", "")) != self._workflow_id
+        ):
+            self._flush_diff_series()
         if self._workflow_id and str(getattr(workflow, "id", "")) != self._workflow_id:
             self._enabled = False
             self._trial_type = None
@@ -419,6 +475,8 @@ class Window(QWidget):
         if state in ("stopped", "done", "error"):
             self._enabled = False
             self._plot_stopped = True  # 流程已终止: 与停记录一致, 曲线一并冻结
+            # 差压试验未收到关闭信号就随流程终止时, 在此兜底回填一次
+            self._flush_diff_series()
         trial = self._trial_type
         if workflow is None:
             info = "未开始"
