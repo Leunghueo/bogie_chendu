@@ -1069,6 +1069,14 @@ class PLCPointTable:
                     else:
                         logging.warning("空气弹簧放气等待超时")
 
+                
+                # 停止压磅保持
+                self.write("12气路排气终止", True)
+                time.sleep(2)
+
+                self.write("12气路排气终止", False)
+                time.sleep(1)
+
                 # 停止压磅保持
                 self.write("压磅中止", True)
                 time.sleep(2)
