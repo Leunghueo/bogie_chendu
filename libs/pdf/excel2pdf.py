@@ -18,6 +18,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+# Pillow 缺失时启用内置最小替身 (须在 openpyxl.drawing.image 导入前执行,
+# 该模块在导入时绑定 PIL.Image); 有真 Pillow 时此调用无副作用。
+try:
+    from . import _pil_shim
+except ImportError:  # 本模块被当作顶层模块直接引用时
+    import _pil_shim
+_pil_shim.ensure_pil()
+
+
 from openpyxl import load_workbook
 from openpyxl.cell import Cell
 from openpyxl.drawing.image import Image as XlsxImage
@@ -226,9 +235,9 @@ class PdfReport:
                         img.anchor = anchor
                         self._ws.add_image(img)
         except Exception as e:
-            # 图片恢复失败不应阻断报告导出
-            # logger.warning(f"恢复模板图片失败（将不含图片导出）: {e}")
-            pass
+            # 图片恢复失败不应阻断报告导出, 但必须留痕
+            # (曾因静默吞异常, 缺 Pillow 丢图问题长期未被发现)
+            logger.warning(f"恢复模板图片失败（将不含图片导出）: {e}")
 
     @staticmethod
     def _build_anchor(anchor_el: ET.Element, ns: dict) -> Any:
