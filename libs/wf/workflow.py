@@ -232,6 +232,14 @@ class Workflow:
             # 急停等待期间新到的重定向请求一并吸收: 操作员已回到选择点, 需要时可再按
             self._redirect_requested = False
             self._redirect_event.clear()
+        # 排气泄压已打破空簧状态: 复位空簧准备标志, 回到选择节点后相关支路
+        # 必须重新走准备流程 (cond 按 TEMP@空簧准备=true 判断是否已准备)
+        params = self.data.get("试验参数")
+        if not isinstance(params, dict):
+            params = {}
+            self.data["试验参数"] = params
+        params["TEMP@空簧准备"] = False
+        logger.info("重定向: 已复位 TEMP@空簧准备=False")
         self._append_workflow_log("evt_wf_redirect")
         self.cur_node = select_node
         return True
