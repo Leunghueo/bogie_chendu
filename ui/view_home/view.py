@@ -1596,19 +1596,33 @@ class Window(QWidget):
         )
         self.workflow_list.setPalette(list_palette)
         layout.addWidget(self.workflow_list, 1)
+        # 任务控制分两行: 第一行 开始试验 独占; 第二行 选择指令|中断试验|终止试验
+        # 中断试验 = 排气泄压后跳回选择节点 (流程不停); 终止试验 = 红色, 真停止
         run_row = QHBoxLayout()
         self.start_flow_btn = QPushButton("开始试验", panel)
-        self.stop_flow_btn = QPushButton("中断试验", panel)
-        self.select_cmd_btn = QPushButton("选择指令", panel)
-        self.stop_flow_btn.setEnabled(False)
-        self.select_cmd_btn.setEnabled(False)
         self.start_flow_btn.clicked.connect(self._start_workflow)
-        self.stop_flow_btn.clicked.connect(self._interrupt_workflow)
-        self.select_cmd_btn.clicked.connect(self._reopen_selection)
         run_row.addWidget(self.start_flow_btn)
-        run_row.addWidget(self.stop_flow_btn)
-        run_row.addWidget(self.select_cmd_btn)
         layout.addLayout(run_row)
+        run_row2 = QHBoxLayout()
+        self.select_cmd_btn = QPushButton("选择指令", panel)
+        self.stop_flow_btn = QPushButton("中断试验", panel)
+        self.terminate_flow_btn = QPushButton("终止试验", panel)
+        self.terminate_flow_btn.setStyleSheet(
+            "QPushButton { background-color: #e53935; color: #ffffff; font-weight: 600; }"
+            "QPushButton:hover { background-color: #c62828; }"
+            "QPushButton:pressed { background-color: #b71c1c; }"
+            "QPushButton:disabled { background-color: #d7dde3; color: #8a97a3; }"
+        )
+        self.select_cmd_btn.setEnabled(False)
+        self.stop_flow_btn.setEnabled(False)
+        self.terminate_flow_btn.setEnabled(False)
+        self.select_cmd_btn.clicked.connect(self._reopen_selection)
+        self.stop_flow_btn.clicked.connect(self._interrupt_workflow)
+        self.terminate_flow_btn.clicked.connect(self._terminate_workflow)
+        run_row2.addWidget(self.select_cmd_btn)
+        run_row2.addWidget(self.stop_flow_btn)
+        run_row2.addWidget(self.terminate_flow_btn)
+        layout.addLayout(run_row2)
         return panel
 
     def _build_monitor_panel(self) -> QWidget:
@@ -2412,6 +2426,7 @@ class Window(QWidget):
         # 切换绑定有 _switch_workflow 的运行门, 开始/删除按钮另有独立门控
         self.stop_flow_btn.setEnabled(running)
         self.select_cmd_btn.setEnabled(running)
+        self.terminate_flow_btn.setEnabled(running)
         self._refresh_workflow_actions()
         self._refresh_status_bar()
 
@@ -2439,6 +2454,18 @@ class Window(QWidget):
 
     def _interrupt_workflow(self) -> None:
         self.workflow_panel.interrupt_workflow()
+
+    def _terminate_workflow(self) -> None:
+        """终止试验: 确认后真停止当前流程 (区别于中断试验的跳回选择节点)."""
+        if not self.workflow_panel.is_running():
+            return
+        reply = QMessageBox.question(
+            self, "终止试验", "该操作会终止该试验",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        self._stop_workflow()
 
     def _reopen_selection(self) -> None:
         runner = self.workflow_panel.runner
