@@ -38,23 +38,29 @@ def air_trial_curves(
     """组装三试验曲线数据: {试验名: (气压1序列, 气压2序列) 或 None}.
 
     空簧保压的序列优先取作业的 air_curve 快照列, 其次取过程数据;
-    差压1->2 / 差压2->1 目前没有任何记录序列 (空气页只记录空簧保压),
-    恒为 None, 结果页对应区块显示“暂无数据”.
+    差压1->2 / 差压2->1 的序列由空气页在试验关闭时整段回填 (含升压阶段),
+    键为 "差压1->2气压1/2" 等; 无记录时为 None, 对应页签显示“暂无数据”.
     """
 
-    def _pair(source: object) -> tuple[list, list] | None:
+    def _pair(
+        source: object,
+        key1: str = "空簧气压1",
+        key2: str = "空簧气压2",
+    ) -> tuple[list, list] | None:
         if not isinstance(source, dict):
             return None
-        p1 = source.get("空簧气压1") or []
-        p2 = source.get("空簧气压2") or []
+        p1 = source.get(key1) or []
+        p2 = source.get(key2) or []
         if p1 or p2:
             return (list(p1), list(p2))
         return None
 
     return {
         "空簧保压": _pair(air_curve) or _pair(process_data),
-        "差压1->2": None,
-        "差压2->1": None,
+        "差压1->2": _pair(air_curve, "差压1->2气压1", "差压1->2气压2")
+        or _pair(process_data, "差压1->2气压1", "差压1->2气压2"),
+        "差压2->1": _pair(air_curve, "差压2->1气压1", "差压2->1气压2")
+        or _pair(process_data, "差压2->1气压1", "差压2->1气压2"),
     }
 
 
