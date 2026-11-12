@@ -2256,10 +2256,20 @@
       "desc": "无",
       "show": true
     },
-    "允许返修": {
+    "返修工装允许": {
       "io": "o",
       "type": "BOOL",
       "addr-2byte": "64.07",
+      "add": null,
+      "segs": null,
+      "unit": "",
+      "desc": "无",
+      "show": true
+    },
+    "返修手动横移": {
+      "io": "o",
+      "type": "BOOL",
+      "addr-2byte": "64.10",
       "add": null,
       "segs": null,
       "unit": "",
@@ -2290,16 +2300,6 @@
       "io": "o",
       "type": "BOOL",
       "addr-2byte": "64.15",
-      "add": null,
-      "segs": null,
-      "unit": "",
-      "desc": "无",
-      "show": true
-    },
-    "允许手动操作": {
-      "io": "o",
-      "type": "BOOL",
-      "addr-2byte": "64.10",
       "add": null,
       "segs": null,
       "unit": "",
