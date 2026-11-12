@@ -292,13 +292,13 @@ class Window(QWidget):
         # 顶部搜索框区域
         root.addWidget(self._build_search_bar())
 
-        # 中部与底部的分割器
-        splitter = QSplitter(Qt.Orientation.Vertical, self)
+        # 左右分割器: 左侧搜索结果列表, 右侧结果表格, 宽度 1:2 (可拖拽调整)
+        splitter = QSplitter(Qt.Orientation.Horizontal, self)
         splitter.addWidget(self._build_log_list_panel())
         splitter.addWidget(self._build_result_panel())
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 2)
-        splitter.setSizes([240, 480])
+        splitter.setSizes([400, 800])
         root.addWidget(splitter, 1)
 
     def _build_search_bar(self) -> QWidget:
@@ -351,46 +351,52 @@ class Window(QWidget):
         self.log_table.itemSelectionChanged.connect(self._on_log_selected)
         layout.addWidget(self.log_table, 1)
 
-        # 导出报告 / 上传EMIS 按钮(位于搜索结果列表与日志结果列表之间)
-        button_row = QHBoxLayout()
-        button_row.setContentsMargins(0, 0, 0, 0)
-        button_row.setSpacing(6)
+        # 操作按钮(位于搜索结果列表下方): 左右布局后左列变窄, 分两行摆放
+        button_row1 = QHBoxLayout()
+        button_row1.setContentsMargins(0, 0, 0, 0)
+        button_row1.setSpacing(6)
 
         self.export_button = QPushButton("导出报告", panel)
         self.export_button.setCursor(Qt.PointingHandCursor)
         self.export_button.clicked.connect(self._on_export)
-        button_row.addWidget(self.export_button)
+        button_row1.addWidget(self.export_button)
 
         self.upload_emis_button = QPushButton("上传EMIS", panel)
         self.upload_emis_button.setCursor(Qt.PointingHandCursor)
         self.upload_emis_button.clicked.connect(self._on_upload_emis)
-        button_row.addWidget(self.upload_emis_button)
+        button_row1.addWidget(self.upload_emis_button)
 
         self.upload_isdp_button = QPushButton("上传ISDP", panel)
         self.upload_isdp_button.setCursor(Qt.PointingHandCursor)
         self.upload_isdp_button.clicked.connect(self._on_upload_isdp)
-        button_row.addWidget(self.upload_isdp_button)
+        button_row1.addWidget(self.upload_isdp_button)
+        button_row1.addStretch()
+        layout.addLayout(button_row1)
+
+        button_row2 = QHBoxLayout()
+        button_row2.setContentsMargins(0, 0, 0, 0)
+        button_row2.setSpacing(6)
 
         self.amend_button = QPushButton("补录数据", panel)
         self.amend_button.setCursor(Qt.PointingHandCursor)
         self.amend_button.clicked.connect(self._on_amend_data)
         # 补录仅管理员可用: 非管理员不显示按钮 (换人登录后由 showEvent 刷新显隐)
         self.amend_button.setVisible(is_admin_user())
-        button_row.addWidget(self.amend_button)
+        button_row2.addWidget(self.amend_button)
 
         self.print_button = QPushButton("打印", panel)
         self.print_button.setCursor(Qt.PointingHandCursor)
         self.print_button.clicked.connect(self._on_print)
-        button_row.addWidget(self.print_button)
+        button_row2.addWidget(self.print_button)
 
         # 报告是否附带空簧试验曲线页 (导出与打印共用 _build_report_pdf, 同受此开关);
         # 默认勾选 = 保持原行为 (有曲线数据就附页)
         self.curve_checkbox = QCheckBox("导出空簧试验曲线", panel)
         self.curve_checkbox.setChecked(True)
-        button_row.addWidget(self.curve_checkbox)
+        button_row2.addWidget(self.curve_checkbox)
 
-        button_row.addStretch()
-        layout.addLayout(button_row)
+        button_row2.addStretch()
+        layout.addLayout(button_row2)
 
         return panel
 
