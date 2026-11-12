@@ -454,6 +454,10 @@ class ResultDialog(QDialog):
         plot.showGrid(x=True, y=True, alpha=0.3)
         plot.setLabel("bottom", "时间（秒）")
         plot.setLabel("left", "气压（kPa）")
+        # Y 轴范围与空气页/PDF 曲线页统一, 取 app.ini [air_chart] 配置 (默认 0-600)
+        from _runtime import air_chart_y_range
+        y_min, y_max = air_chart_y_range()
+        plot.setYRange(y_min, y_max, padding=0)
         plot.addLegend(offset=(10, 10))
         for series, color, name in ((p1, "#4da3ff", "气压1"), (p2, "#ffb84d", "气压2")):
             ys: list[float] = []

@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from _runtime import get_runtime
+from _runtime import air_chart_y_range, get_runtime
 from libs import jobstore
 from libs.wf.base import utc_now
 
@@ -143,10 +143,9 @@ def _render_air_curve_png(job: dict[str, Any] | None) -> Path | None:
         for key, values, color in series:
             xs = [index / 60.0 for index in range(len(values))]
             plot.plot(xs, values, pen=pg.mkPen(color, width=2.5), name=key)
-        all_values = [value for _, values, _ in series for value in values]
-        low, high = min(all_values), max(all_values)
-        pad = max(10.0, (high - low) * 0.15)
-        plot.setYRange(max(0.0, low - pad), high + pad, padding=0)
+        # Y 轴范围与空气页/结果页统一, 取 app.ini [air_chart] 配置 (默认 0-600)
+        y_min, y_max = air_chart_y_range()
+        plot.setYRange(y_min, y_max, padding=0)
         max_minutes = max(len(values) for _, values, _ in series) / 60.0
         plot.setXRange(0, max(1.0, max_minutes), padding=0)
 

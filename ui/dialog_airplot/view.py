@@ -16,7 +16,7 @@ try:
 except ImportError:
     pg = None
 
-from _runtime import get_runtime
+from _runtime import air_chart_y_range, get_runtime
 
 
 class ChartWidget(QWidget):
@@ -44,7 +44,9 @@ class ChartWidget(QWidget):
         self._plot.getAxis("left").setTextPen("#e5e7eb")
         self._plot.getAxis("bottom").setTextPen("#e5e7eb")
         self._plot.setXRange(0, 15, padding=0)
-        self._plot.setYRange(0, 600)
+        # Y 轴范围与结果页/PDF 曲线页统一, 取 app.ini [air_chart] 配置 (默认 0-600)
+        y_min, y_max = air_chart_y_range()
+        self._plot.setYRange(y_min, y_max, padding=0)
         self._curves = [
             self._plot.plot(pen=pg.mkPen("#f2e65c", width=2)),
             self._plot.plot(pen=pg.mkPen("#f45b5b", width=2)),

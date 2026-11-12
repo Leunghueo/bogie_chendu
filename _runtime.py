@@ -55,6 +55,24 @@ config = configparser.ConfigParser()
 config.read(BASE_DIR / "app.ini", encoding="utf-8")
 
 
+def air_chart_y_range(cfg: configparser.ConfigParser | None = None) -> tuple[float, float]:
+    """空气试验图表 Y 轴范围 (kPa): app.ini [air_chart] y_min/y_max.
+
+    三处图表共用: 空气页实时图、结果页曲线页签、导出 PDF 曲线页.
+    段/键缺失、非数值或 y_min >= y_max 时一律按默认 (0, 600); 改配置后
+    重启程序生效 (与 app.ini 其余配置一致).
+    """
+    parser = cfg if cfg is not None else config
+    try:
+        y_min = parser.getfloat("air_chart", "y_min", fallback=0.0)
+        y_max = parser.getfloat("air_chart", "y_max", fallback=600.0)
+    except (configparser.Error, ValueError):
+        return (0.0, 600.0)
+    if not y_min < y_max:
+        return (0.0, 600.0)
+    return (y_min, y_max)
+
+
 def source_enabled(config: configparser.ConfigParser, section: str) -> bool:
     """plc/vsp/can 的总开关：app.ini 里 enable 优先，兼容旧的 used。
 
