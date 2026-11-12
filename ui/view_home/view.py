@@ -641,8 +641,10 @@ class SelectBranchDialog(QDialog):
 class CreateJobConfirmDialog(QDialog):
     """创建工单前的防呆确认弹窗.
 
-    展示工单的 车型 / 位号 / 车号 / 编号 / 流程, 必须由用户显式点击 "确认创建"
-    才会返回 Accepted; 回车键被吞掉 (避免表单里敲回车误创建), 关闭/Esc 视为取消.
+    展示工单的 车型 / 位号 / 车号 / 编号 / 流程, 并在第二张卡片里醒目展示
+    该车型试验参数中的压头间距 / 空载压力 / 满载压力 / 空簧保压压力 /
+    差压1/2 压力, 必须由用户显式点击 "确认创建" 才会返回 Accepted; 回车键被
+    吞掉 (避免表单里敲回车误创建), 关闭/Esc 视为取消.
     """
 
     # (meta 键, 显示标题)
@@ -654,15 +656,32 @@ class CreateJobConfirmDialog(QDialog):
         ("流程", "流程"),
     )
 
-    def __init__(self, meta: dict[str, object], parent: QWidget | None = None) -> None:
+    # (试验参数键, 显示标题): 只展示这几项关键参数, 缺失时显示 "-"
+    _PARAM_FIELDS: tuple[tuple[str, str], ...] = (
+        ("压头间距", "压头间距"),
+        ("空载@压力1", "空载压力1"),
+        ("空载@压力2", "空载压力2"),
+        ("满载@压力1", "满载压力1"),
+        ("满载@压力2", "满载压力2"),
+        ("空簧保压@气压", "空簧保压压力"),
+        ("差压1->2@气压", "差压1压力"),
+        ("差压2->1@气压", "差压2压力"),
+    )
+
+    def __init__(
+        self,
+        meta: dict[str, object],
+        params: dict[str, object] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle("创建工单确认")
         self.setModal(True)
         self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
         self.setMinimumWidth(430)
-        self._build_ui(meta)
+        self._build_ui(meta, params or {})
 
-    def _build_ui(self, meta: dict[str, object]) -> None:
+    def _build_ui(self, meta: dict[str, object], params: dict[str, object]) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(20, 18, 20, 16)
         root.setSpacing(14)
@@ -687,6 +706,28 @@ class CreateJobConfirmDialog(QDialog):
             )
             form.addRow(f"{title}:", value_label)
         root.addWidget(card)
+
+        if params:
+            params_title = QLabel("该车型试验参数：", self)
+            params_title.setObjectName("createJobParamsTitle")
+            root.addWidget(params_title)
+
+            params_card = QFrame(self)
+            params_card.setObjectName("createJobParamsCard")
+            params_form = QFormLayout(params_card)
+            params_form.setContentsMargins(14, 12, 14, 12)
+            params_form.setHorizontalSpacing(16)
+            params_form.setVerticalSpacing(10)
+            params_form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            for param_key, title in self._PARAM_FIELDS:
+                raw = params.get(param_key)
+                value = "" if raw is None else str(raw).strip()
+                value_label = QLabel(value or "-", params_card)
+                value_label.setObjectName(
+                    "createJobValue" if value else "createJobValueEmpty"
+                )
+                params_form.addRow(f"{title}:", value_label)
+            root.addWidget(params_card)
 
         tip = QLabel("信息有误请点击“取消”，返回修改后再创建。", self)
         tip.setObjectName("createJobTip")
@@ -735,6 +776,15 @@ class CreateJobConfirmDialog(QDialog):
             " background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px;"
             "}"
             "QFrame#createJobCard QLabel {"
+            " background: none; font-size: 16px; color: #475569;"
+            "}"
+            "QLabel#createJobParamsTitle {"
+            " font-size: 16px; font-weight: 600; color: #1e40af; background: none;"
+            "}"
+            "QFrame#createJobParamsCard {"
+            " background: #eff6ff; border: 1.5px solid #2563eb; border-radius: 6px;"
+            "}"
+            "QFrame#createJobParamsCard QLabel {"
             " background: none; font-size: 16px; color: #475569;"
             "}"
             "QLabel#createJobValue {"
@@ -2331,7 +2381,9 @@ class Window(QWidget):
             QMessageBox.warning(self, "创建流程失败", str(exc))
             return
         # 防呆: 先弹出工单信息确认框, 用户确认后再真正创建
-        dialog = CreateJobConfirmDialog(workflow.meta, self)
+        dialog = CreateJobConfirmDialog(
+            workflow.meta, (workflow.data or {}).get("试验参数"), self
+        )
         accepted = dialog.exec() == QDialog.DialogCode.Accepted
         dialog.deleteLater()
         if not accepted:
