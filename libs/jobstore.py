@@ -264,8 +264,12 @@ def amend_job(
     summary: dict[str, Any],
     meta: dict[str, Any],
     entries: list[dict[str, Any]],
+    name: str | None = None,
 ) -> bool:
-    """补录: 单事务内整块更新 summary/meta 两列, 并把审计条目并入 logs 数组."""
+    """补录: 单事务内整块更新 summary/meta 两列, 并把审计条目并入 logs 数组.
+
+    name 非空时一并更新作业名 (meta 里的车号/编号改了, 工单名跟着变).
+    """
     ensure_schema(db_path)
     with _connect(db_path) as conn:
         row = conn.execute(f"SELECT logs FROM {TABLE} WHERE id=?", (job_id,)).fetchone()
@@ -275,10 +279,16 @@ def amend_job(
         if not isinstance(logs, list):
             logs = []
         logs.extend(entries)
-        conn.execute(
-            f"UPDATE {TABLE} SET summary=?, meta=?, logs=? WHERE id=?",
-            (_dumps(summary), _dumps(meta), _dumps(logs), job_id),
-        )
+        if name:
+            conn.execute(
+                f"UPDATE {TABLE} SET summary=?, meta=?, logs=?, name=? WHERE id=?",
+                (_dumps(summary), _dumps(meta), _dumps(logs), name, job_id),
+            )
+        else:
+            conn.execute(
+                f"UPDATE {TABLE} SET summary=?, meta=?, logs=? WHERE id=?",
+                (_dumps(summary), _dumps(meta), _dumps(logs), job_id),
+            )
         return True
 
 

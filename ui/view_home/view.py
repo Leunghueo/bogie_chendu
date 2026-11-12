@@ -43,7 +43,7 @@ from libs import jobstore
 from wf import NodeStoppedError, WorkflowState
 from wf.base import utc_now
 from ui.dialog_confirm.view import ConfirmDialog
-from ui.dialog_result.view import ResultDialog, air_trial_curves
+from ui.dialog_result.view import ResultDialog, air_trial_curves, compose_job_name
 from ui.wgt_gflow.view import FlowGraph
 
 
@@ -139,7 +139,12 @@ class WaitCountdownDialog(QDialog):
         button_row.addWidget(self._interrupt_button)
         layout.addLayout(button_row)
         layout.addStretch(1)
-        self._cancel_button.hide()
+        # “跳过等待”按钮显隐由 app.ini 的 [ui] enable_skip 控制(缺失/非法按 false 隐藏, 改后重启生效)
+        try:
+            show_skip = self.runtime["config"].getboolean("ui", "enable_skip", fallback=False)
+        except Exception:
+            show_skip = False
+        self._cancel_button.setVisible(bool(show_skip))
 
         self.wait_event.connect(self._apply_wait_payload)
         self._render_countdown()
@@ -191,6 +196,14 @@ class WaitCountdownDialog(QDialog):
         self._unsubscribe()
         super().closeEvent(event)
 
+def _coerce_editable(args: object) -> bool:
+    """节点参数 editable 的布尔归一: 不写默认 True; 字符串按 true/1/yes 认."""
+    value = args.get("editable", True) if isinstance(args, dict) else True
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes", "y"}
+    return bool(value)
+
+
 class WorkflowRunner(QThread):
     node_begin_event = Signal(dict)
     node_event = Signal(dict)
@@ -199,7 +212,7 @@ class WorkflowRunner(QThread):
     select_request = Signal(str, str, object)
     loop_request = Signal(str, str)
     confirm_request = Signal(str, str, str, object)
-    result_request = Signal(list)
+    result_request = Signal(list, bool)  # (结果数据, 节点 editable: False 则只读查看)
 
     def __init__(self, workflow, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -398,11 +411,16 @@ class WorkflowRunner(QThread):
         return self._confirm_result
 
     def _result_handler(self, node, result_data: list) -> bool:
-        """处理显示结果对话框的请求"""
+        """处理显示结果对话框的请求.
+
+        节点参数 editable 决定窗口是否可编辑: 不写默认 True (保持现有行为),
+        显式 False 时只读查看. 透传给面板的 _show_result_dialog.
+        """
         self._result_event.clear()
         self._result_data = result_data
         self._result_result = False
-        self.result_request.emit(result_data)
+        editable = _coerce_editable(getattr(node, "args", None))
+        self.result_request.emit(result_data, editable)
         while not self._result_event.wait(0.05):
             if self._stopping:
                 raise NodeStoppedError("workflow stopped")
@@ -659,12 +677,10 @@ class CreateJobConfirmDialog(QDialog):
     # (试验参数键, 显示标题): 只展示这几项关键参数, 缺失时显示 "-"
     _PARAM_FIELDS: tuple[tuple[str, str], ...] = (
         ("压头间距", "压头间距"),
-        ("空载@压力1", "载荷力1"),
-        ("空载@压力2", "载荷力2"),
-        ("反复空载@压力1", "空载力1"),
-        ("反复空载@压力2", "空载力2"),
-        ("反复满载@压力1", "满载力1"),
-        ("反复满载@压力2", "满载力2"),
+        ("空载@压力1", "空载压力1"),
+        ("空载@压力2", "空载压力2"),
+        ("满载@压力1", "满载压力1"),
+        ("满载@压力2", "满载压力2"),
         ("空簧保压@气压", "空簧保压压力"),
         ("差压1->2@气压", "差压1压力"),
         ("差压2->1@气压", "差压2压力"),
@@ -1321,12 +1337,21 @@ class WorkflowRuntimePanel(QWidget):
         dialog.raise_()
         dialog.activateWindow()
 
-    def _show_result_dialog(self, result_data: list) -> None:
-        """显示试验结果对话框并等待用户确认"""
+    def _show_result_dialog(self, result_data: list, editable: bool = True) -> None:
+        """显示试验结果对话框并等待用户确认.
+
+        editable=False (节点参数) 时只读查看: 表格与 meta 行均不可编辑,
+        确认不写回, 流程收到确认后继续.
+        """
         if self.runner is None:
             return
         self._close_result_dialog()
-        dialog = ResultDialog(result_data, self)
+        dialog = ResultDialog(
+            result_data,
+            self,
+            read_only=not editable,
+            meta=dict(getattr(self.workflow, "meta", {}) or {}),
+        )
         self._result_dialog = dialog
         dialog.setModal(False)
         dialog.setWindowModality(Qt.WindowModality.NonModal)
@@ -2199,7 +2224,8 @@ class Window(QWidget):
         if job_id:
             # 执行中改为只读快照查看: 不写回记录; 面板绑定不受影响
             # (_switch_workflow 的运行门保留, 节点显示仍绑在运行工单上)
-            self._show_job_result(job_id, view_only=self.workflow_panel.is_running())
+            # 双击一律只读查看 (不论流程是否运行中); 修改走节点触发或历史页补录
+            self._show_job_result(job_id, view_only=True)
 
     def _job_result_template(self, job: dict) -> dict:
         """作业尚无 summary 时的结果数据兜底.
@@ -2318,6 +2344,7 @@ class Window(QWidget):
             read_only=view_only,
             refresh_callback=refresh_callback,
             curves=job_curves,
+            meta=meta,
         )
         title = f"结果数据 - {job.get('name') or ''}"
         dialog.setWindowTitle(title + "（执行中快照）" if view_only else title)
@@ -2325,6 +2352,8 @@ class Window(QWidget):
             return
         if view_only:
             return
+        # 非只读分支 (目前无调用方走这里, 保留作一致性): meta 以对话框为准, 工单名跟着变
+        meta = dict(dialog.meta)
         meta["互检员"] = dialog.checker
         try:
             ok = jobstore.amend_job(
@@ -2332,6 +2361,7 @@ class Window(QWidget):
                 job_id,
                 summary=result_data,
                 meta=meta,
+                name=compose_job_name(meta),
                 entries=[
                     {
                         "消息源": "补录",

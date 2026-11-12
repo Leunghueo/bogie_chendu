@@ -566,13 +566,15 @@ class Window(QMainWindow):
         self._render_footer_status()
 
     def _is_admin_user(self) -> bool:
-        cur_user = self.runtime.get("cur_user")
-        if isinstance(cur_user, dict):
-            username = str(cur_user.get("username", "")).strip().lower()
-            user_class = str(cur_user.get("user_class", "")).strip().upper()
-            return username == "admin" or user_class in {"SUPERUSER", "ADMIN"}
-        current_user = str(self.runtime.get("current_user", self.current_user)).strip().lower()
-        return current_user == "admin"
+        # 权限判断的唯一定义在 _runtime.is_admin_user; 框架实例的 current_user
+        # 兜底保留: runtime 里既无 cur_user 又无 current_user 时看它
+        from _runtime import is_admin_user
+
+        if is_admin_user():
+            return True
+        if self.runtime.get("cur_user") is None and not self.runtime.get("current_user"):
+            return str(self.current_user).strip().lower() == "admin"
+        return False
 
     def dispatch_action(self, view_id: str, pop: bool, fixed: bool, admin: bool = False) -> None:
         if view_id not in self.views:

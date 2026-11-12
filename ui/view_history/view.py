@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from _runtime import air_chart_y_range, get_runtime
+from _runtime import air_chart_y_range, get_runtime, is_admin_user
 from libs import jobstore
 from libs.wf.base import utc_now
 
@@ -374,6 +374,8 @@ class Window(QWidget):
         self.amend_button = QPushButton("补录数据", panel)
         self.amend_button.setCursor(Qt.PointingHandCursor)
         self.amend_button.clicked.connect(self._on_amend_data)
+        # 补录仅管理员可用: 非管理员不显示按钮 (换人登录后由 showEvent 刷新显隐)
+        self.amend_button.setVisible(is_admin_user())
         button_row.addWidget(self.amend_button)
 
         self.print_button = QPushButton("打印", panel)
@@ -624,6 +626,11 @@ class Window(QWidget):
             self, "已打印", f"报告已发送到默认打印机:\n{target}{output_path}"
         )
 
+    def showEvent(self, event) -> None:
+        """页面每次显示时刷新补录按钮显隐 (登录用户可能已更换)."""
+        super().showEvent(event)
+        self.amend_button.setVisible(is_admin_user())
+
     def _on_amend_data(self) -> None:
         """补录数据: 打开所选作业的结果对话框, 允许用户修改后回写作业库.
 
@@ -632,7 +639,12 @@ class Window(QWidget):
         """
         from PySide6.QtWidgets import QDialog, QMessageBox
 
-        from ui.dialog_result.view import ResultDialog, air_trial_curves
+        from ui.dialog_result.view import ResultDialog, air_trial_curves, compose_job_name
+
+        # 按钮已按权限隐藏, 此处再验一次: 防将来其他入口绕过显隐
+        if not is_admin_user():
+            QMessageBox.warning(self, "权限不足", "补录数据仅允许管理员操作。")
+            return
 
         selected = self.log_table.selectedItems()
         if not selected:
@@ -674,12 +686,16 @@ class Window(QWidget):
                 air_curve=job.get("air_curve"),
                 process_data=job_data.get("过程数据"),
             ),
+            meta=meta,
         )
         dialog.setWindowTitle("补录数据")
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
 
+        # meta 以对话框为准 (用户/车号/编号可能已改), 工单名跟着一起变
+        meta = dict(dialog.meta)
         meta["互检员"] = dialog.checker
+        new_name = compose_job_name(meta)
         job_id = str(job.get("id") or "")
         try:
             ok = jobstore.amend_job(
@@ -687,6 +703,7 @@ class Window(QWidget):
                 job_id,
                 summary=result_data,
                 meta=meta,
+                name=new_name,
                 entries=[
                     {
                         "消息源": "补录",

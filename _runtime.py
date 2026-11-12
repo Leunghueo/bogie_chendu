@@ -73,6 +73,21 @@ def air_chart_y_range(cfg: configparser.ConfigParser | None = None) -> tuple[flo
     return (y_min, y_max)
 
 
+def is_admin_user() -> bool:
+    """当前登录用户是否为管理员: 用户名 admin, 或用户级别 SUPERUSER/ADMIN.
+
+    权限判断的唯一定义: 设置菜单、历史页补录等所有权限点都以它为准.
+    登录信息缺失时按非管理员处理.
+    """
+    cur_user = RUNTIME.get("cur_user")
+    if isinstance(cur_user, dict):
+        username = str(cur_user.get("username", "")).strip().lower()
+        user_class = str(cur_user.get("user_class", "")).strip().upper()
+        return username == "admin" or user_class in {"SUPERUSER", "ADMIN"}
+    current_user = str(RUNTIME.get("current_user", "")).strip().lower()
+    return current_user == "admin"
+
+
 def source_enabled(config: configparser.ConfigParser, section: str) -> bool:
     """plc/vsp/can 的总开关：app.ini 里 enable 优先，兼容旧的 used。
 

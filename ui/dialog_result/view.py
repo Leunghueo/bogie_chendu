@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QPushButton,
     QTabWidget,
     QTableWidget,
@@ -62,6 +63,26 @@ def air_trial_curves(
         "差压2->1": _pair(air_curve, "差压2->1气压1", "差压2->1气压2")
         or _pair(process_data, "差压2->1气压1", "差压2->1气压2"),
     }
+
+
+#: 结果窗口可编辑的 meta 字段 (与创建工单时的 meta 键一致)
+META_EDIT_KEYS = ("用户", "车号", "编号")
+
+
+def compose_job_name(meta: dict) -> str | None:
+    """按创建工单的拼法由 meta 合成工单名: 车型-位号-车号-编号-流程.
+
+    车型/位号/流程任一缺失时返回 None (调用方保持原名); 编号为空时按
+    创建工单的规则记为 "ID".
+    """
+    model = str(meta.get("车型") or "").strip()
+    pos = str(meta.get("位号") or "").strip()
+    flow = str(meta.get("流程") or "").strip()
+    if not model or not pos or not flow:
+        return None
+    train = str(meta.get("车号") or "").strip()
+    axle = str(meta.get("编号") or "").strip() or "ID"
+    return f"{model}-{pos}-{train}-{axle}-{flow}"
 
 
 class ResultTable(QTableWidget):
@@ -274,6 +295,7 @@ class ResultDialog(QDialog):
         read_only: bool = False,
         refresh_callback=None,
         curves: dict | None = None,
+        meta: dict | None = None,
     ) -> None:
         """
         初始化试验结果对话框
@@ -287,6 +309,10 @@ class ResultDialog(QDialog):
             checker: 补录模式下互检员的初始值; 为 None 时从 runtime 当前 workflow.meta 读取
             curves: 三试验曲线数据 (air_trial_curves 的返回值); 为 None 时实时模式
                 从当前 workflow 的过程数据推导, 补录模式则一律显示暂无数据
+            meta: 工单 meta (用户/车号/编号等). 传入时在顶部显示 meta 编辑行,
+                可编辑模式下确认后写入 self.meta 供调用方落盘 (实时模式还会
+                同步回 workflow.meta 并重算工单名); 只读模式下仅展示.
+                为 None 时不显示该行.
         """
         super().__init__(parent)
         self.setWindowTitle("试验结果")
@@ -299,6 +325,10 @@ class ResultDialog(QDialog):
         # refresh_callback 提供时显示刷新按钮, 回调返回最新 items 或 None
         self._read_only = read_only
         self._refresh_callback = refresh_callback
+        # meta 编辑行初值与确认后的结果: 调用方在 Accepted 后读 self.meta
+        self._meta_init: dict = dict(meta) if isinstance(meta, dict) else {}
+        self.meta: dict = dict(self._meta_init)
+        self._meta_edits: dict[str, QLineEdit] = {}
         # 曲线区数据: 显式传入优先, 推导规则见 _resolve_curves
         self._curves_arg = curves
         self._curve_plots: dict[str, object] = {}
@@ -312,6 +342,19 @@ class ResultDialog(QDialog):
     def _build_ui(self, test_result: list) -> None:
         """构建UI"""
         layout = QVBoxLayout(self)
+
+        # meta 编辑行 (用户/车号/编号): 顶部展示, 可编辑模式下可改, 只读模式下禁用
+        if self._meta_init:
+            meta_row = QHBoxLayout()
+            for key in META_EDIT_KEYS:
+                meta_row.addWidget(QLabel(key))
+                edit = QLineEdit(str(self._meta_init.get(key) or ""), self)
+                edit.setMinimumWidth(110)
+                edit.setEnabled(not self._read_only)
+                self._meta_edits[key] = edit
+                meta_row.addWidget(edit)
+            meta_row.addStretch()
+            layout.addLayout(meta_row)
 
         # 互检员选择行: 只读下拉, 只能从用户库候选中选取(避免误删/误改文本)
         checker_row = QHBoxLayout()
@@ -333,7 +376,7 @@ class ResultDialog(QDialog):
         # 告知表格"测量值"列索引, 供回车轮换定位
         self.table._dialog_col_std = self.COL_STD
         self.table.read_only = self._read_only
-        # 只允许编辑测量值、最小值、最大值列
+        # 只允许编辑测量值列 (最小值/最大值列已锁为只读, 见 _populate_table)
         if self._read_only:
             self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         else:
@@ -547,14 +590,16 @@ class ResultDialog(QDialog):
                 std_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.table.setItem(row, self.COL_STD, std_item)
 
-                # 最小值（可编辑）
+                # 最小值（只读: 判定上下限不允许在结果窗口修改, 只改测量值）
                 min_item = QTableWidgetItem(str(item_data.get("最小值", "")))
                 min_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                min_item.setFlags(min_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 self.table.setItem(row, self.COL_MIN, min_item)
 
-                # 最大值（可编辑）
+                # 最大值（只读: 同上）
                 max_item = QTableWidgetItem(str(item_data.get("最大值", "")))
                 max_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                max_item.setFlags(max_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 self.table.setItem(row, self.COL_MAX, max_item)
 
                 # 单位（只读）
@@ -766,6 +811,9 @@ class ResultDialog(QDialog):
             self._sync_table_to_workflow()
             # 互检员写入 workflow.meta, 并以独立事件落盘供导出PDF读取
             self._sync_checker_to_workflow()
+            # meta 编辑行 (用户/车号/编号) 同步: 实时模式写回 workflow.meta 并重算
+            # 工单名, 补录模式只记入 self.meta 供调用方落盘
+            self._sync_meta_to_workflow()
         self.confirmed.emit(result)
         self.done(QDialog.Accepted if result else QDialog.Rejected)
 
@@ -794,11 +842,44 @@ class ResultDialog(QDialog):
 
             logging.getLogger(__name__).exception("failed to sync checker to workflow meta")
 
+    def _sync_meta_to_workflow(self) -> None:
+        """把 meta 编辑行 (用户/车号/编号) 的值收进 self.meta.
+
+        实时模式: 写回运行中 workflow.meta, 并按新 meta 重算工单名
+        (compose_job_name), 以 meta_update 事件落盘, 下一次快照即带新名;
+        补录模式: 不触碰运行中的 workflow, 调用方读 self.meta 后经
+        amend_job 落盘 (含改名). 编号留空时按创建工单规则记为 "ID".
+        """
+        if not self._meta_edits:
+            return
+        for key, edit in self._meta_edits.items():
+            self.meta[key] = edit.text().strip()
+        if not self.meta.get("编号"):
+            self.meta["编号"] = "ID"
+        if self._result_store is not None:
+            return
+        try:
+            from _runtime import get_runtime
+
+            wf = get_runtime().get("wf")
+            if wf is None:
+                return
+            wf.meta.update({k: self.meta[k] for k in META_EDIT_KEYS})
+            new_name = compose_job_name(wf.meta)
+            if new_name:
+                wf.name = new_name
+            wf._append_workflow_log("meta_update", meta=dict(wf.meta))
+        except Exception:  # noqa: BLE001
+            import logging
+
+            logging.getLogger(__name__).exception("failed to sync meta to workflow")
+
     def _sync_table_to_workflow(self) -> bool:
         """将表格中的编辑数据反写到结果数据
 
         直接执行反写, 不弹窗确认。
-        覆盖字段: 测量值 / 最小值 / 最大值 / 结论
+        覆盖字段: 仅测量值 / 结论 (最小值/最大值列已锁为只读, 此处也不写回,
+        判定上下限只能改车型模板)
         (单位列为只读展示, "打印"等标记字段不受影响)
 
         补录模式下写入传入的 result_store, 否则写入 workflow.data["结果数据"]。
@@ -819,8 +900,6 @@ class ResultDialog(QDialog):
             if name not in result_data:
                 continue
             result_data[name]["测量值"] = _to_number(fields["测量值"])
-            result_data[name]["最小值"] = _to_number(fields["最小值"])
-            result_data[name]["最大值"] = _to_number(fields["最大值"])
             result_data[name]["结论"] = fields["结论"]
         return True
 
