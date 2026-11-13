@@ -9,6 +9,7 @@ from _runtime import get_runtime
 from .dialog_about.view import Window as AboutDialog
 from .dialog_manual.view import Window as ManualDialog
 from .dialog_beam_weight.view import Window as BeamWeightDialog
+from .dialog_handop.view import Window as HandopDialog
 from .dialog_airplot.view import Window as AirplotView
 from .dialog_dyn_dims.view import Window as DynDimsView
 from .dialog_pts.view import Window as PtsView
@@ -90,6 +91,7 @@ VIEWS = {
     "dialog_about": {"title": "关于", "obj": AboutDialog},
     "dialog_manual": {"title": "使用说明", "obj": ManualDialog},
     "dialog_beam_weight": {"title": "横梁自重修正", "obj": BeamWeightDialog},
+    "dialog_handop": {"title": "手动操作", "obj": HandopDialog},
 }
 
 MENUS = {
@@ -159,6 +161,14 @@ MENUS = {
             "pop": True,
             "fixed": False,
             "admin": True,
+        },
+        {
+            "title": "手动操作",
+            "icon": "info.png",
+            "view_id": "dialog_handop",
+            "pop": True,
+            "fixed": False,
+            "admin": False,
         },
     ],
     "帮助": [
