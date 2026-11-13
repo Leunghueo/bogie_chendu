@@ -42,6 +42,23 @@ def bed_section(name: str) -> dict[str, Any]:
     return section if isinstance(section, dict) else {}
 
 
+def interrupt_thresholds() -> tuple[float, float, float]:
+    """中断序列用的安全阈值 (空气压力, 加载压力, 压头位移): bed.json「安全阈值」段.
+
+    段/键缺失或非数值时单项回落 5.0; 中断序列的状态判定与 emc_* 方法
+    共用这一处取值, 保证判定与执行不打架.
+    """
+    section = bed_section("安全阈值")
+
+    def _num(key: str) -> float:
+        try:
+            return float(section.get(key))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return 5.0
+
+    return (_num("空气压力"), _num("加载压力"), _num("压头位移"))
+
+
 def reload_bed_data() -> dict[str, Any]:
     """重新从 bed.json 载入并刷新 runtime（UI 里改完 bed 配置后调用）。"""
     global bed_data

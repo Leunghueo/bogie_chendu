@@ -40,7 +40,7 @@ from PySide6.QtWidgets import (
 
 from _runtime import get_runtime
 from libs import jobstore
-from wf import NodeStoppedError, WorkflowState
+from wf import NodeRedirectError, NodeStoppedError, WorkflowState
 from wf.base import utc_now
 from ui.dialog_confirm.view import ConfirmDialog
 from ui.dialog_result.view import ResultDialog, air_trial_curves, compose_job_name
@@ -213,6 +213,8 @@ class WorkflowRunner(QThread):
     loop_request = Signal(str, str)
     confirm_request = Signal(str, str, str, object)
     result_request = Signal(list, bool)  # (结果数据, 节点 editable: False 则只读查看)
+    interrupt_prompt_request = Signal(str)  # 中断序列弹窗提问文字
+    interrupt_done = Signal()  # 中断序列决议已定 (回选择节点或真停止)
 
     def __init__(self, workflow, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -222,9 +224,11 @@ class WorkflowRunner(QThread):
         self._loop_event = Event()
         self._confirm_event = Event()
         self._result_event = Event()
+        self._interrupt_prompt_event = Event()
         self._selected_node_id: str | None = None
         self._loop_count: int | None = None
         self._confirm_result = False
+        self._interrupt_prompt_result = False
         self._result_data: list = []
         self._result_result: bool = False
         self._pending_select_payload: tuple[str, str, list[dict]] | None = None
@@ -236,6 +240,7 @@ class WorkflowRunner(QThread):
         self._loop_event.set()
         self._confirm_event.set()
         self._result_event.set()
+        self._interrupt_prompt_event.set()
         runtime = get_runtime()
         plc = runtime.get("plc")
         cancel_pending_actions = getattr(plc, "cancel_pending_actions", None)
@@ -265,6 +270,10 @@ class WorkflowRunner(QThread):
         self._confirm_result = confirmed
         self._confirm_event.set()
 
+    def submit_interrupt_prompt(self, answer: bool) -> None:
+        self._interrupt_prompt_result = answer
+        self._interrupt_prompt_event.set()
+
     def run(self) -> None:
         runtime = get_runtime()
         workflow = self._workflow
@@ -281,11 +290,13 @@ class WorkflowRunner(QThread):
         workflow.events.on("evt_wf_done", lambda workflow: self._emit_data(workflow))
         workflow.events.on("evt_wf_stop", lambda workflow: self._emit_data(workflow))
         workflow.events.on("evt_wf_error", lambda workflow, error=None: self._emit_data(workflow))
+        workflow.events.on("evt_interrupt", self._on_interrupt_event)
 
         workflow.select_handler = self._select_handler
         workflow.loop_handler = self._loop_handler
         workflow.confirm_handler = self._confirm_handler
         workflow.result_handler = self._result_handler
+        workflow.interrupt_prompt_handler = self._interrupt_prompt_handler
         workflow.broker = runtime["broker"]
 
 
@@ -372,6 +383,11 @@ class WorkflowRunner(QThread):
             if self._stopping:
                 self._pending_select_payload = None
                 raise NodeStoppedError("workflow stopped")
+            if self._workflow is not None and getattr(self._workflow, "_interrupt_requested", False):
+                # 停在选择点时点了新中断按钮: 打断选择等待, 让主循环跑中断序列
+                # (只认中断请求, 普通重定向仍不打断选择等待, 保持旧行为)
+                self._pending_select_payload = None
+                raise NodeRedirectError("workflow interrupt requested")
             if triggered:
                 self._select_event.clear()
                 if self._select_reopen_requested:
@@ -427,6 +443,24 @@ class WorkflowRunner(QThread):
         if self._stopping:
             raise NodeStoppedError("workflow stopped")
         return self._result_result
+
+    def _interrupt_prompt_handler(self, question: str) -> bool:
+        """中断序列弹窗: 发信号给面板弹 Yes/No, 等答复 (默认否).
+
+        与 _confirm_handler 同一模式: 等待可被真停止抢占.
+        """
+        self._interrupt_prompt_event.clear()
+        self._interrupt_prompt_result = False
+        self.interrupt_prompt_request.emit(question)
+        while not self._interrupt_prompt_event.wait(0.05):
+            if self._stopping:
+                raise NodeStoppedError("workflow stopped")
+        if self._stopping:
+            raise NodeStoppedError("workflow stopped")
+        return self._interrupt_prompt_result
+
+    def _on_interrupt_event(self, workflow=None, **kwargs) -> None:
+        self.interrupt_done.emit()
 
     def submit_result(self, result: bool) -> None:
         """提交结果对话框的响应"""
@@ -840,6 +874,7 @@ class _LoopCountDialog(QInputDialog):
 class WorkflowRuntimePanel(QWidget):
     state_changed = Signal(str, str)
     running_changed = Signal(bool)
+    interrupt_finished = Signal()  # 中断序列决议已定, 界面侧可恢复中断按钮
 
     def __init__(self, parent: QWidget | None = None, *, show_title: bool = True, show_controls: bool = True, show_data: bool = True, flow_graph=None) -> None:
         super().__init__(parent)
@@ -988,6 +1023,8 @@ class WorkflowRuntimePanel(QWidget):
         self.runner.loop_request.connect(self._request_loop_count)
         self.runner.confirm_request.connect(self._request_confirmation)
         self.runner.result_request.connect(self._show_result_dialog)
+        self.runner.interrupt_prompt_request.connect(self._request_interrupt_prompt)
+        self.runner.interrupt_done.connect(self._on_interrupt_done)
         self.runner.finished.connect(self._on_runner_finished)
         self.runner.start()
         self._persist_runtime_state()
@@ -999,36 +1036,44 @@ class WorkflowRuntimePanel(QWidget):
         self.state_label.setText("状态: stopping")
         self.runner.stop()
 
-    def interrupt_workflow(self) -> None:
-        """中断试验: 排气泄压后跳回选择节点重选支路, 流程本身不停止.
+    def interrupt_workflow(self) -> bool:
+        """中断试验 (新统一按钮): 确认后挂起流程, 跑中断序列.
 
-        两种情形先弹确认框: 常规中断提示"退回到贴合状态"; 已停在选择弹窗、
-        流程没有 select 节点、或上一次重定向尚在排气泄压中时, 中断无处可跳,
-        提示"终止该试验", 确认后走真停止."""
+        序列由工作线程驱动: 读状态 -> 按需排气/卸力 -> 两次弹窗
+        (是否回退压头 / 是否结束试验) -> 回选择节点或真停止.
+        返回 True 表示序列已启动 (调用方应禁用中断按钮, 待 interrupt_finished
+        信号恢复); 选否或不可中断时返回 False.
+        """
         workflow = self.workflow
         if workflow is None or not self.is_running():
-            return
-        runner = self.runner
-        select_pending = runner is not None and getattr(runner, "_pending_select_payload", None) is not None
-        has_select = any(node.node_type == "select" for node in workflow.nodes.values())
-        if select_pending or not has_select or workflow._redirect_in_progress:
-            reply = QMessageBox.question(
-                self, "中断试验", "该操作会终止该试验",
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
-            )
-            if reply != QMessageBox.Yes:
-                return
-            self.stop_workflow()
-            return
+            return False
+        if workflow._interrupt_in_progress:
+            return False
         reply = QMessageBox.question(
-            self, "中断试验", "该操作会退回到贴合状态",
+            self, "中断试验", "是否中断当前试验？",
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
+            return False
+        logger.info("试验流程中断: 挂起后跑中断序列")
+        self.state_label.setText("状态: 正在中断处理…")
+        workflow.request_interrupt()
+        return True
+
+    def _request_interrupt_prompt(self, question: str) -> None:
+        """中断序列弹窗: 模态 Yes/No, 默认否 (最不具破坏性的选项)."""
+        if self.runner is None:
             return
-        logger.info("试验流程中断: 排气泄压后跳回选择节点")
-        self.state_label.setText("状态: 正在排气泄压…")
-        workflow.request_redirect()
+        reply = QMessageBox.question(
+            self, "中断试验", question,
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        self.runner.submit_interrupt_prompt(reply == QMessageBox.Yes)
+
+    def _on_interrupt_done(self) -> None:
+        if self.is_running():
+            self.state_label.setText(f"状态: {WorkflowState.RUNNING.value}")
+        self.interrupt_finished.emit()
 
     def shutdown(self, timeout_ms: int = 3000) -> None:
         self._close_wait_dialog()
@@ -1692,8 +1737,8 @@ class Window(QWidget):
         )
         self.workflow_list.setPalette(list_palette)
         layout.addWidget(self.workflow_list, 1)
-        # 任务控制分两行: 第一行 开始试验 独占; 第二行 选择指令|中断试验|终止试验
-        # 中断试验 = 排气泄压后跳回选择节点 (流程不停); 终止试验 = 红色, 真停止
+        # 任务控制分两行: 第一行 开始试验 独占; 第二行 中断试验 独占 (红色, 新统一按钮)
+        # 选择指令与终止试验隐藏但保留 (不删除), 需要时恢复可见即可
         run_row = QHBoxLayout()
         self.start_flow_btn = QPushButton("开始试验", panel)
         self.start_flow_btn.clicked.connect(self._start_workflow)
@@ -1703,12 +1748,14 @@ class Window(QWidget):
         self.select_cmd_btn = QPushButton("选择指令", panel)
         self.stop_flow_btn = QPushButton("中断试验", panel)
         self.terminate_flow_btn = QPushButton("终止试验", panel)
-        self.terminate_flow_btn.setStyleSheet(
+        self.stop_flow_btn.setStyleSheet(
             "QPushButton { background-color: #e53935; color: #ffffff; font-weight: 600; }"
             "QPushButton:hover { background-color: #c62828; }"
             "QPushButton:pressed { background-color: #b71c1c; }"
             "QPushButton:disabled { background-color: #d7dde3; color: #8a97a3; }"
         )
+        self.select_cmd_btn.setVisible(False)
+        self.terminate_flow_btn.setVisible(False)
         self.select_cmd_btn.setEnabled(False)
         self.stop_flow_btn.setEnabled(False)
         self.terminate_flow_btn.setEnabled(False)
@@ -1745,6 +1792,7 @@ class Window(QWidget):
         self.workflow_panel = WorkflowRuntimePanel(panel, show_title=False, show_controls=False, show_data=True, flow_graph=self._flow_graph)
         self.workflow_panel.state_changed.connect(self._on_workflow_state_changed)
         self.workflow_panel.running_changed.connect(self._on_workflow_running_changed)
+        self.workflow_panel.interrupt_finished.connect(self._on_interrupt_finished)
         self.workflow_panel.setVisible(False)
         layout.addWidget(self.workflow_panel, 1)
         return panel
@@ -2514,7 +2562,13 @@ class Window(QWidget):
         self.workflow_panel.stop_workflow()
 
     def _interrupt_workflow(self) -> None:
-        self.workflow_panel.interrupt_workflow()
+        if self.workflow_panel.interrupt_workflow():
+            self.stop_flow_btn.setEnabled(False)
+
+    def _on_interrupt_finished(self) -> None:
+        # 中断序列决议已定 (回选择节点或真停止): 仍在跑就恢复中断按钮
+        if self.workflow_panel.is_running():
+            self.stop_flow_btn.setEnabled(True)
 
     def _terminate_workflow(self) -> None:
         """终止试验: 确认后真停止当前流程 (区别于中断试验的跳回选择节点)."""

@@ -12,14 +12,14 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from _runtime import get_runtime
+from _runtime import get_runtime, interrupt_thresholds
 
 try:
     from jobstore import local_now as _job_local_now, upsert_snapshot as _job_upsert_snapshot
 except ModuleNotFoundError:  # pragma: no cover - fallback for package imports
     from libs.jobstore import local_now as _job_local_now, upsert_snapshot as _job_upsert_snapshot
 from .base import EventEmitter, NodeRedirectError, NodeStoppedError, WorkflowError, WorkflowState, utc_now
-from .node import ConfirmHandler, LoopHandler, Node, ResultHandler, SelectHandler
+from .node import ConfirmHandler, InterruptPromptHandler, LoopHandler, Node, ResultHandler, SelectHandler
 
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,7 @@ class Workflow:
         loop_handler: LoopHandler | None = None,
         confirm_handler: ConfirmHandler | None = None,
         result_handler: ResultHandler | None = None,
+        interrupt_prompt_handler: InterruptPromptHandler | None = None,
     ) -> None:
         self.id = ""
         self.name = ""
@@ -54,12 +55,15 @@ class Workflow:
         self._redirect_event = threading.Event()
         self._redirect_requested = False
         self._redirect_in_progress = False
+        self._interrupt_requested = False
+        self._interrupt_in_progress = False
         self._running_loop: asyncio.AbstractEventLoop | None = None
         self._running_task: asyncio.Task[Any] | None = None
         self.select_handler = select_handler
         self.loop_handler = loop_handler
         self.confirm_handler = confirm_handler
         self.result_handler = result_handler
+        self.interrupt_prompt_handler = interrupt_prompt_handler
 
         self._rawdata = rawdata
         self.data = self._rawdata
@@ -117,6 +121,7 @@ class Workflow:
         self._skip_wait_event.clear()
         self._redirect_event.clear()
         self._redirect_requested = False
+        self._interrupt_requested = False
         for node in self.nodes.values():
             node.reset()
         if not force:
@@ -152,6 +157,28 @@ class Workflow:
         无 select 节点的流程由主循环回落为真停止. 这里先行取消 PLC 侧挂起动作,
         避免被中断支路的残留写点与随后的急停流程冲突."""
         if self.state == WorkflowState.RUNNING:
+            self._redirect_requested = True
+            self._redirect_event.set()
+            try:
+                plc = get_runtime().get("plc")
+            except Exception:
+                plc = None
+            if plc is not None and hasattr(plc, "cancel_pending_actions"):
+                try:
+                    plc.cancel_pending_actions()
+                except Exception:
+                    logger.exception("failed to cancel plc actions")
+
+    def request_interrupt(self) -> None:
+        """请求中断序列 (新中断试验按钮): 复用重定向的打断通道挂起流程.
+
+        与 request_redirect 的区别: 主循环收到后跑 _do_interrupt_sequence
+        (读状态 -> 分段 emc -> 两次弹窗 -> 回 selector 或真停止), 而不是
+        直接 _do_redirect. 序列执行中的新请求直接吸收 (按钮侧也禁用).
+        这里先行取消 PLC 侧挂起动作, 与 request_redirect 一致.
+        """
+        if self.state == WorkflowState.RUNNING and not self._interrupt_in_progress:
+            self._interrupt_requested = True
             self._redirect_requested = True
             self._redirect_event.set()
             try:
@@ -229,8 +256,9 @@ class Workflow:
             await self._await_emc_stop()
         finally:
             self._redirect_in_progress = False
-            # 急停等待期间新到的重定向请求一并吸收: 操作员已回到选择点, 需要时可再按
+            # 急停等待期间新到的重定向/中断请求一并吸收: 操作员已回到选择点, 需要时可再按
             self._redirect_requested = False
+            self._interrupt_requested = False
             self._redirect_event.clear()
         # 排气泄压已打破空簧状态: 复位空簧准备标志, 回到选择节点后相关支路
         # 必须重新走准备流程 (cond 按 TEMP@空簧准备=true 判断是否已准备)
@@ -241,6 +269,127 @@ class Workflow:
         params["TEMP@空簧准备"] = False
         logger.info("重定向: 已复位 TEMP@空簧准备=False")
         self._append_workflow_log("evt_wf_redirect")
+        self.cur_node = select_node
+        return True
+
+    async def _do_interrupt_sequence(self) -> bool:
+        """执行中断序列: 挂起后按流程图 v2 (2026-11-13 定稿) 处理, 返回是否已跳回 select 节点.
+
+        返回 False 表示应真停止 (无 select 节点, 或操作员在结束提问选是),
+        调用方回落为 NodeStoppedError. 决议记一条 evt_interrupt 日志 (落盘
+        并经 events 发出, 供界面侧恢复中断按钮).
+        """
+        self._interrupt_requested = False
+        self._redirect_requested = False
+        self._redirect_event.clear()
+        self._interrupt_in_progress = True
+        self._redirect_in_progress = True
+        try:
+            to_selector = await self._run_interrupt_sequence()
+        finally:
+            self._interrupt_in_progress = False
+            self._redirect_in_progress = False
+            # 序列期间新到的中断/重定向请求一并吸收: 决议已定, 需要时可再按
+            self._interrupt_requested = False
+            self._redirect_requested = False
+            self._redirect_event.clear()
+        self._append_workflow_log(
+            "evt_interrupt", resolution="selector" if to_selector else "stop"
+        )
+        return to_selector
+
+    async def _run_interrupt_sequence(self) -> bool:
+        """中断序列本体 (工作线程驱动, 弹窗经 interrupt_prompt_handler 问 UI).
+
+        1. 读当前状态 (气压/加载压力/垂向位移各 2 路, 阈值取 bed.json「安全阈值」);
+        2. 有气或有力 -> emc_air -> emc_force, 然后重新查一遍 no_move;
+        3. 压头未回退 -> 问是否回退压头: 选否直接回 selector (不再问结束),
+           选是跑 emc_back 后问是否结束试验;
+        4. 压头已回退 -> 直接问是否结束试验; 选否回 selector, 选是真停止.
+        返回 True: 已跳回 select 节点; False: 应真停止.
+        """
+        try:
+            plc = get_runtime().get("plc")
+        except Exception:
+            plc = None
+        air_t, force_t, move_t = interrupt_thresholds()
+        select_node = next((n for n in self.nodes.values() if n.node_type == "select"), None)
+
+        def _read_state() -> tuple[bool, bool, bool]:
+            def _num(name: str) -> float | None:
+                if plc is None:
+                    return None
+                try:
+                    value = plc.read(name)
+                except Exception:
+                    return None
+                return float(value) if isinstance(value, (int, float)) else None
+
+            air = (_num("气压采集1"), _num("气压采集2"))
+            force = (_num("加载压力1"), _num("加载压力2"))
+            move = (_num("加载头垂向位移1"), _num("加载头垂向位移2"))
+            logger.info(
+                "中断序列: 状态 气压=%s 加载压力=%s 位移=%s (阈值 %s/%s/%s)",
+                air, force, move, air_t, force_t, move_t,
+            )
+            # 读不到按"有"处理 (保守: 该跑的 emc 段照跑), 避免读数故障漏处理
+            no_air = all(v is not None and v < air_t for v in air)
+            no_force = all(v is not None and v < force_t for v in force)
+            no_move = all(v is not None and v < move_t for v in move)
+            return no_air, no_force, no_move
+
+        async def _run_emc(method_name: str, threshold: float) -> None:
+            if plc is None:
+                return
+            method = getattr(plc, method_name, None)
+            if method is None:
+                return
+            thread = method(threshold)
+            if thread is not None:
+                # 与 _await_emc_stop 同一模式: 等待可被真停止抢占, 线程自身跑完
+                await asyncio.to_thread(thread.join)
+
+        async def _ask(question: str) -> bool:
+            if self.interrupt_prompt_handler is not None:
+                response = self.interrupt_prompt_handler(question)
+                if inspect.isawaitable(response):
+                    response = await response
+            else:
+                logger.warning("中断序列: 无弹窗处理, 默认选否: %s", question)
+                response = False
+            self.check_stopped()
+            if isinstance(response, bool):
+                return response
+            return str(response).strip().lower() in {"y", "yes", "1", "true"}
+
+        no_air, no_force, no_move = _read_state()
+        if not no_air or not no_force:
+            await _run_emc("emc_air", air_t)
+            await _run_emc("emc_force", force_t)
+            # 重新查一遍 no_move (定稿第 3 点)
+            _, _, no_move = _read_state()
+
+        if select_node is None:
+            logger.info("中断序列: 流程无 select 节点, emc 完成后真停止")
+            return False
+
+        if not no_move:
+            # 回退选否 -> 直接回 selector, 不再问结束 (定稿第 2 点, 有意如此)
+            if await _ask("是否回退压头？"):
+                await _run_emc("emc_back", move_t)
+                if await _ask("是否结束试验？"):
+                    return False
+        else:
+            if await _ask("是否结束试验？"):
+                return False
+
+        # 回 selector: 复位空簧准备标志 (排气已打破空簧状态, 与 _do_redirect 一致)
+        params = self.data.get("试验参数")
+        if not isinstance(params, dict):
+            params = {}
+            self.data["试验参数"] = params
+        params["TEMP@空簧准备"] = False
+        logger.info("中断序列: 跳回选择节点")
         self.cur_node = select_node
         return True
 
@@ -279,8 +428,14 @@ class Workflow:
             while self.cur_node is not None:
                 self.check_stopped()
                 if self._redirect_requested:
-                    # 节点间隙收到重定向请求 (上一节点已 finish): 不经节点执行, 直接处理
-                    if not await self._do_redirect():
+                    # 节点间隙收到重定向/中断请求 (上一节点已 finish): 不经节点执行, 直接处理
+                    # 中断序列请求优先于普通重定向
+                    handled = (
+                        await self._do_interrupt_sequence()
+                        if self._interrupt_requested
+                        else await self._do_redirect()
+                    )
+                    if not handled:
                         self._stop_requested = True
                         raise NodeStoppedError("workflow stopped")
                     continue
@@ -305,7 +460,12 @@ class Workflow:
                     self._extend_logs(current_node.node_logs)
 
                 if redirect_hit:
-                    if not await self._do_redirect():
+                    handled = (
+                        await self._do_interrupt_sequence()
+                        if self._interrupt_requested
+                        else await self._do_redirect()
+                    )
+                    if not handled:
                         self._stop_requested = True
                         raise NodeStoppedError("workflow stopped")
                     continue

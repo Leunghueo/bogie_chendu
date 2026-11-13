@@ -24,6 +24,8 @@ SelectHandler = Callable[["Node", list[str]], str | Awaitable[str]]
 LoopHandler = Callable[["Node"], int | Awaitable[int]]
 ConfirmHandler = Callable[["Node"], bool | Awaitable[bool]]
 ResultHandler = Callable[["Node", dict], bool | Awaitable[bool]]
+#: 中断序列弹窗: 提问文字 -> 操作员选是/否 (跑在 UI 侧, 工作线程等待答复)
+InterruptPromptHandler = Callable[[str], bool | Awaitable[bool]]
 NODE_ACT_REGISTRY: dict[str, NodeActor] = {}
 
 

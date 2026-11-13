@@ -1122,6 +1122,151 @@ class PLCPointTable:
         thread.start()
         return thread
 
+    # -- 中断序列分段方法 (新中断试验按钮用, 与 _emc_stop 互不影响) --
+    # 步骤与 _emc_stop 内联顺序一致 (含现场补充的放气完成复位与 12 气路排气
+    # 终止脉冲), 阈值由调用方按 bed.json「安全阈值」传入, 不在此处写死.
+    # 每段起守护线程跑并返回该线程, 与 _emc_stop 同一等待模式 (等待方用
+    # asyncio.to_thread(thread.join) 等, 真停止可抢占等待, 线程自身跑完).
+
+    def _emc_wait_signal(self, name: str, timeout: float = 120.0, interval: float = 0.5) -> bool:
+        """在子线程内轮询等待PLC信号,不阻塞主程序 (供 emc_* 分段方法用)."""
+        elapsed = 0.0
+        while elapsed < timeout:
+            val = self.read(name)
+            if val is True:
+                return True
+            time.sleep(interval)
+            elapsed += interval
+        return False
+
+    def emc_air(self, air_threshold: float):
+        """中断序列第 1 段: 排气. 气压最大值大于阈值时放气并等完成信号."""
+        existing = getattr(self, "_emc_air_thread", None)
+        if existing is not None and existing.is_alive():
+            logging.info("中断序列: 排气流程已在执行, 不重复启动")
+            return existing
+
+        def _worker():
+            try:
+                logging.info("中断序列: 开始排气")
+                # 复位放气完成标志 (与 _emc_stop 现场版一致)
+                self.write("空气弹簧放气@完成", False)
+                time.sleep(1)
+                air_p1 = self.read("气压采集1")
+                air_p2 = self.read("气压采集2")
+                # 读不到按"有气"处理 (保守, 与序列判定一致)
+                need_air = (
+                    not isinstance(air_p1, (int, float))
+                    or not isinstance(air_p2, (int, float))
+                    or max(air_p1, air_p2) > air_threshold
+                )
+                max_air = max(
+                    air_p1 if isinstance(air_p1, (int, float)) else 0,
+                    air_p2 if isinstance(air_p2, (int, float)) else 0,
+                )
+                if need_air:
+                    logging.info(f"中断序列: 气压({max_air})>{air_threshold}, 启动排气")
+                    self.write("空气弹簧放气", True)
+                    time.sleep(1)
+                    if self._emc_wait_signal("空气弹簧放气@完成"):
+                        logging.info("中断序列: 空气弹簧放气完成")
+                    else:
+                        logging.warning("中断序列: 空气弹簧放气等待超时")
+                # 12 气路排气终止脉冲 (与 _emc_stop 现场版一致)
+                self.write("12气路排气终止", True)
+                time.sleep(2)
+                self.write("12气路排气终止", False)
+                time.sleep(1)
+                logging.info("中断序列: 排气段执行完毕")
+            except Exception:
+                logging.exception("中断序列: 排气段执行失败")
+
+        thread = threading.Thread(target=_worker, daemon=True, name="emc-air-worker")
+        self._emc_air_thread = thread
+        thread.start()
+        return thread
+
+    def emc_force(self, force_threshold: float):
+        """中断序列第 2 段: 卸力. 压磅中止 + 清零 + 力工退, 有残余力时等快退完成."""
+        existing = getattr(self, "_emc_force_thread", None)
+        if existing is not None and existing.is_alive():
+            logging.info("中断序列: 卸力流程已在执行, 不重复启动")
+            return existing
+
+        def _worker():
+            try:
+                logging.info("中断序列: 开始卸力")
+                self.write("压磅中止", True)
+                time.sleep(2)
+                self.clear()
+                self.write("设定加载头1加载力", 5)
+                self.write("设定加载头2加载力", 5)
+                time.sleep(0.5)
+                self.write("力工退", True)
+                time.sleep(5)
+                load_p1 = self.read("加载压力1")
+                load_p2 = self.read("加载压力2")
+                # 读不到按"有残余力"处理 (保守, 与序列判定一致)
+                need_wait = (
+                    not isinstance(load_p1, (int, float))
+                    or not isinstance(load_p2, (int, float))
+                    or max(load_p1, load_p2) > force_threshold
+                )
+                if need_wait:
+                    if self._emc_wait_signal("快退加载装置@完成"):
+                        logging.info("中断序列: 快退加载装置完成")
+                    else:
+                        logging.warning("中断序列: 快退加载装置等待超时")
+                logging.info("中断序列: 卸力段执行完毕")
+            except Exception:
+                logging.exception("中断序列: 卸力段执行失败")
+
+        thread = threading.Thread(target=_worker, daemon=True, name="emc-force-worker")
+        self._emc_force_thread = thread
+        thread.start()
+        return thread
+
+    def emc_back(self, move_threshold: float):
+        """中断序列第 3 段: 回退压头. 任一垂向位移大于阈值时快退到 0 位并等完成.
+
+        回退目标取 0 (与正常结束流程的设定一致, 且小于 no_move 判定阈值,
+        避免回退后复查仍判未回退); 末尾清零与 _emc_stop 尾段一致.
+        """
+        existing = getattr(self, "_emc_back_thread", None)
+        if existing is not None and existing.is_alive():
+            logging.info("中断序列: 回退流程已在执行, 不重复启动")
+            return existing
+
+        def _worker():
+            try:
+                logging.info("中断序列: 开始回退压头")
+                head_y1 = self.read("加载头垂向位移1")
+                head_y2 = self.read("加载头垂向位移2")
+                # 读不到按"未回退"处理 (保守, 与序列判定一致)
+                if (
+                    not isinstance(head_y1, (int, float))
+                    or not isinstance(head_y2, (int, float))
+                    or head_y1 > move_threshold
+                    or head_y2 > move_threshold
+                ):
+                    self.write("设定加载头1快进垂向位移", 0)
+                    self.write("设定加载头2快进垂向位移", 0)
+                    self.write("快退加载装置", True)
+                    time.sleep(0.5)
+                    if self._emc_wait_signal("快退加载装置@完成"):
+                        logging.info("中断序列: 快退加载装置完成")
+                    else:
+                        logging.warning("中断序列: 快退加载装置等待超时")
+                self.clear()
+                logging.info("中断序列: 回退段执行完毕")
+            except Exception:
+                logging.exception("中断序列: 回退段执行失败")
+
+        thread = threading.Thread(target=_worker, daemon=True, name="emc-back-worker")
+        self._emc_back_thread = thread
+        thread.start()
+        return thread
+
     def clear(self):
         """将地址60-64全部置0"""
         for addr in [25,26,27,28,29,60,61,62,63,64]:
