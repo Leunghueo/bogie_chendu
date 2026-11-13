@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 
 from _runtime import air_chart_y_range, get_runtime, is_admin_user
 from libs import jobstore
-from libs.wf.base import utc_now
+from libs.wf.base import WorkflowState, utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -398,6 +398,26 @@ class Window(QWidget):
         button_row2.addStretch()
         layout.addLayout(button_row2)
 
+        # 删除记录: 仅管理员可见 (主页的删除工单已取消, 统一收归此处);
+        # 红色样式与主页"终止试验"一致, 提示危险操作
+        button_row3 = QHBoxLayout()
+        button_row3.setContentsMargins(0, 0, 0, 0)
+        button_row3.setSpacing(6)
+
+        self.delete_button = QPushButton("删除记录", panel)
+        self.delete_button.setCursor(Qt.PointingHandCursor)
+        self.delete_button.setStyleSheet(
+            "QPushButton { background-color: #e53935; color: #ffffff; font-weight: 600; }"
+            "QPushButton:hover { background-color: #c62828; }"
+            "QPushButton:pressed { background-color: #b71c1c; }"
+            "QPushButton:disabled { background-color: #d7dde3; color: #8a97a3; }"
+        )
+        self.delete_button.clicked.connect(self._on_delete_record)
+        self.delete_button.setVisible(is_admin_user())
+        button_row3.addWidget(self.delete_button)
+        button_row3.addStretch()
+        layout.addLayout(button_row3)
+
         return panel
 
     def _build_result_panel(self) -> QWidget:
@@ -633,9 +653,68 @@ class Window(QWidget):
         )
 
     def showEvent(self, event) -> None:
-        """页面每次显示时刷新补录按钮显隐 (登录用户可能已更换)."""
+        """页面每次显示时刷新管理员按钮显隐 (登录用户可能已更换)."""
         super().showEvent(event)
         self.amend_button.setVisible(is_admin_user())
+        self.delete_button.setVisible(is_admin_user())
+
+    def _on_delete_record(self) -> None:
+        """删除选中的历史记录: 仅管理员, 删前确认, 正在试验的作业不能删.
+
+        删除后发 job_deleted 事件, 主页收到后丢掉内存里的同 id 工单,
+        避免已删记录仍显示在工单列表里.
+        """
+        from PySide6.QtWidgets import QMessageBox
+
+        # 按钮已按权限隐藏, 此处再验一次: 防将来其他入口绕过显隐
+        if not is_admin_user():
+            QMessageBox.warning(self, "权限不足", "删除记录仅允许管理员操作。")
+            return
+
+        selected = self.log_table.selectedItems()
+        if not selected:
+            QMessageBox.warning(self, "提示", "请先在搜索结果列表中选择一条作业记录")
+            return
+        job = self._current_job()
+        if job is None:
+            return
+        job_id = str(job.get("id") or "")
+
+        # 正在试验的作业不能删: 删了也会被下一次快照重建, 且会丢运行状态
+        wf = self.runtime.get("wf")
+        if (
+            wf is not None
+            and str(getattr(wf, "id", "")) == job_id
+            and getattr(wf, "state", None) == WorkflowState.RUNNING
+        ):
+            QMessageBox.warning(self, "提示", "该作业正在试验中，无法删除")
+            return
+
+        name = str(job.get("name") or "")
+        answer = QMessageBox.question(
+            self,
+            "删除记录",
+            f"确定要删除记录“{name}”吗?\n删除后其作业记录与结果数据将一并删除, 不可恢复。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            ok = jobstore.delete_job(self._job_db_path(), job_id)
+            if not ok:
+                raise RuntimeError("作业记录不存在")
+        except Exception:
+            logger.exception("删除记录失败: %s", job_id)
+            QMessageBox.critical(self, "删除失败", "删除记录失败, 详情见当天日志")
+            return
+
+        broker = self.runtime.get("broker")
+        if broker is not None:
+            broker.publish("job_deleted", job_id=job_id)
+        self._refresh_logs()
+        logger.info("删除记录成功: %s", job_id)
+        QMessageBox.information(self, "删除成功", "记录已删除")
 
     def _on_amend_data(self) -> None:
         """补录数据: 打开所选作业的结果对话框, 允许用户修改后回写作业库.

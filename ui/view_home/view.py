@@ -1577,6 +1577,7 @@ class Window(QWidget):
             return
         self._broker_subscriptions = [
             broker.subscribe("plc_emc_stop", self._on_plc_emc),
+            broker.subscribe("job_deleted", self._on_job_deleted),
         ]
 
     def _unsubscribe(self) -> None:
@@ -1589,6 +1590,27 @@ class Window(QWidget):
 
     def _on_plc_emc(self, **payload) -> None:
         self._stop_workflow()
+
+    def _on_job_deleted(self, **payload) -> None:
+        """历史页删记录后同步: 丢掉内存里的同 id 工单并刷新列表.
+
+        历史页的删除发生在 UI 线程, broker 同步派发, 此处可直接动界面;
+        UI 尚未建好时只清数据不碰控件.
+        """
+        job_id = str(payload.get("job_id") or "")
+        if not job_id:
+            return
+        self._db_jobs.pop(job_id, None)
+        self.workflow_instances[:] = [
+            inst for inst in self.workflow_instances if str(inst["id"]) != job_id
+        ]
+        if not hasattr(self, "workflow_list"):
+            if self.current_workflow_id == job_id:
+                self.current_workflow_id = None
+            return
+        if self.current_workflow_id == job_id:
+            self._set_current_workflow(None)
+        self._load_workflow_list()
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -1645,11 +1667,8 @@ class Window(QWidget):
         layout.addWidget(self.current_flow_label)
         action_row = QHBoxLayout()
         self.create_flow_btn = QPushButton("创建工单", panel)
-        self.delete_flow_btn = QPushButton("删除工单", panel)
         self.create_flow_btn.clicked.connect(self._create_workflow)
-        self.delete_flow_btn.clicked.connect(self._delete_current_workflow)
         action_row.addWidget(self.create_flow_btn)
-        action_row.addWidget(self.delete_flow_btn)
         layout.addLayout(action_row)
         layout.addWidget(QLabel("当前工单", panel))
         self.workflow_list = QTableWidget(0, 4, panel)
@@ -2027,8 +2046,8 @@ class Window(QWidget):
         return True
 
     def _refresh_workflow_actions(self) -> None:
-        """按当前选中任务刷新开始/删除按钮: 未开始/已停止的工单可开始;
-        删除不限状态, 任何已选中的任务都可删 (删除前有确认弹窗)."""
+        """按当前选中任务刷新开始按钮: 未开始/已停止的工单可开始.
+        删除已移至历史页 (仅管理员), 主页不再提供删除入口."""
         if not hasattr(self, "start_flow_btn"):
             return
         running = self.workflow_panel.is_running()
@@ -2037,9 +2056,7 @@ class Window(QWidget):
         if instance is not None:
             state = instance["workflow"].state
             startable = state in (WorkflowState.IDLE, WorkflowState.STOPPED)
-        deletable = self.current_workflow_id is not None
         self.start_flow_btn.setEnabled(startable and not running)
-        self.delete_flow_btn.setEnabled(deletable and not running)
 
     def _sync_flow_graph(self, workflow) -> None:
         """选中任务变化时同步右侧流程示意图: 有 workflow 对象就画它,
@@ -2452,46 +2469,6 @@ class Window(QWidget):
         self._flow_graph.update(workflow)
         logger.info(f"创建流程: Name={workflow.name}")
 
-    def _delete_current_workflow(self) -> None:
-        if self.workflow_panel.is_running() or self.current_workflow_id is None:
-            return
-        target_id = str(self.current_workflow_id)
-        entries = self._ordered_task_entries()
-        entry = next((item for item in entries if item["id"] == target_id), None)
-        if entry is None:
-            return
-        instance = entry["instance"]
-        job = entry["job"]
-        # 任何状态的任务都可删除: 先弹窗确认, 确认后连同作业库记录一并删除
-        name = ""
-        if instance is not None:
-            name = str(instance["workflow"].name or "")
-        elif job is not None:
-            name = str(job.get("name") or "")
-        answer = QMessageBox.question(
-            self,
-            "删除任务",
-            f"确定要删除任务“{name}”吗?\n删除后其作业记录与结果数据将一并删除, 不可恢复。",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if answer != QMessageBox.StandardButton.Yes:
-            return
-        try:
-            jobstore.delete_job(self._job_db_path(), target_id)
-        except Exception:
-            logger.exception("删除工单作业记录失败: id=%s", target_id)
-        self._db_jobs.pop(target_id, None)
-        if instance is not None:
-            self.workflow_instances.remove(instance)
-        remaining_ids = [item["id"] for item in entries if item["id"] != target_id]
-        next_workflow_id: str | None = None
-        if remaining_ids:
-            deleted_index = [item["id"] for item in entries].index(target_id)
-            next_workflow_id = remaining_ids[min(deleted_index, len(remaining_ids) - 1)]
-        self._set_current_workflow(next_workflow_id)
-        self._load_workflow_list()
-
     def _current_fault_message(self) -> str:
         return self._fault_message
 
@@ -2507,7 +2484,7 @@ class Window(QWidget):
     def _on_workflow_running_changed(self, running: bool) -> None:
         self.create_flow_btn.setEnabled(not running)
         # 工单列表运行期间保持可用: 双击查看只读快照依赖它的鼠标事件;
-        # 切换绑定有 _switch_workflow 的运行门, 开始/删除按钮另有独立门控
+        # 切换绑定有 _switch_workflow 的运行门, 开始按钮另有独立门控
         self.stop_flow_btn.setEnabled(running)
         self.select_cmd_btn.setEnabled(running)
         self.terminate_flow_btn.setEnabled(running)
