@@ -1036,7 +1036,7 @@ class PLCPointTable:
                     f"急停数据: 加载力=({load_p1},{load_p2}), 位移=({head_y1},{head_y2}), 气压=({air_p1},{air_p2})"
                 )
 
-                def _wait_signal(name: str, timeout: float = 120.0, interval: float = 0.5) -> bool:
+                def _wait_signal(name: str, timeout: float = 500.0, interval: float = 0.5) -> bool:
                     """在子线程内轮询等待PLC信号,不阻塞主程序"""
                     elapsed = 0.0
                     while elapsed < timeout:
@@ -1128,7 +1128,7 @@ class PLCPointTable:
     # 每段起守护线程跑并返回该线程, 与 _emc_stop 同一等待模式 (等待方用
     # asyncio.to_thread(thread.join) 等, 真停止可抢占等待, 线程自身跑完).
 
-    def _emc_wait_signal(self, name: str, timeout: float = 120.0, interval: float = 0.5) -> bool:
+    def _emc_wait_signal(self, name: str, timeout: float = 500.0, interval: float = 0.5) -> bool:
         """在子线程内轮询等待PLC信号,不阻塞主程序 (供 emc_* 分段方法用)."""
         elapsed = 0.0
         while elapsed < timeout:
@@ -1213,8 +1213,8 @@ class PLCPointTable:
                     or max(load_p1, load_p2) > force_threshold
                 )
                 if need_wait:
-                    if self._emc_wait_signal("快退加载装置@完成"):
-                        logging.info("中断序列: 快退加载装置完成")
+                    if self._emc_wait_signal("力工退@完成"):
+                        logging.info("中断序列: 力工退完成")
                     else:
                         logging.warning("中断序列: 快退加载装置等待超时")
                 logging.info("中断序列: 卸力段执行完毕")
