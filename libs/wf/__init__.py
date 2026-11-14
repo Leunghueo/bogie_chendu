@@ -1,6 +1,6 @@
 from .base import EventEmitter, NodeRedirectError, NodeStoppedError, WorkflowError, WorkflowState
 from .algo import ALGO_REGISTRY, register_algo
-from .node import ConfirmHandler, InterruptPromptHandler, LoopHandler, NODE_ACT_REGISTRY, Node, SelectHandler, register_node_actor
+from .node import ConfirmHandler, InterruptPromptHandler, NODE_ACT_REGISTRY, Node, SelectHandler, register_node_actor
 from .workflow import Workflow
 
 __all__ = [
@@ -8,7 +8,6 @@ __all__ = [
     "EventEmitter",
     "ConfirmHandler",
     "InterruptPromptHandler",
-    "LoopHandler",
     "NODE_ACT_REGISTRY",
     "Node",
     "NodeRedirectError",

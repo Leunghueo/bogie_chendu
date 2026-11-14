@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QHeaderView,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -210,7 +209,6 @@ class WorkflowRunner(QThread):
     data_event = Signal(object)
     state_event = Signal(str, str)
     select_request = Signal(str, str, object)
-    loop_request = Signal(str, str)
     confirm_request = Signal(str, str, str, object)
     result_request = Signal(list, bool)  # (结果数据, 节点 editable: False 则只读查看)
     interrupt_prompt_request = Signal(str)  # 中断序列弹窗提问文字
@@ -221,12 +219,10 @@ class WorkflowRunner(QThread):
         self._workflow = workflow
         self._stopping = False
         self._select_event = Event()
-        self._loop_event = Event()
         self._confirm_event = Event()
         self._result_event = Event()
         self._interrupt_prompt_event = Event()
         self._selected_node_id: str | None = None
-        self._loop_count: int | None = None
         self._confirm_result = False
         self._interrupt_prompt_result = False
         self._result_data: list = []
@@ -237,7 +233,6 @@ class WorkflowRunner(QThread):
     def stop(self) -> None:
         self._stopping = True
         self._select_event.set()
-        self._loop_event.set()
         self._confirm_event.set()
         self._result_event.set()
         self._interrupt_prompt_event.set()
@@ -261,10 +256,6 @@ class WorkflowRunner(QThread):
         if self._pending_select_payload is not None and not self._stopping:
             self._select_reopen_requested = True
             self._select_event.set()
-
-    def submit_loop_count(self, loop_count: int | None) -> None:
-        self._loop_count = loop_count
-        self._loop_event.set()
 
     def submit_confirmation(self, confirmed: bool) -> None:
         self._confirm_result = confirmed
@@ -293,7 +284,6 @@ class WorkflowRunner(QThread):
         workflow.events.on("evt_interrupt", self._on_interrupt_event)
 
         workflow.select_handler = self._select_handler
-        workflow.loop_handler = self._loop_handler
         workflow.confirm_handler = self._confirm_handler
         workflow.result_handler = self._result_handler
         workflow.interrupt_prompt_handler = self._interrupt_prompt_handler
@@ -402,19 +392,6 @@ class WorkflowRunner(QThread):
             raise RuntimeError(f"invalid selection for node {node.node_id}")
         return self._selected_node_id
 
-    def _loop_handler(self, node) -> int:
-        self._loop_event.clear()
-        self._loop_count = None
-        self.loop_request.emit(node.node_id, node.node_name)
-        while not self._loop_event.wait(0.05):
-            if self._stopping:
-                raise NodeStoppedError("workflow stopped")
-        if self._stopping:
-            raise NodeStoppedError("workflow stopped")
-        if self._loop_count is None or self._loop_count < 1:
-            raise NodeStoppedError("workflow stopped")
-        return self._loop_count
-
     def _confirm_handler(self, node) -> bool:
         self._confirm_event.clear()
         self._confirm_result = False
@@ -422,6 +399,9 @@ class WorkflowRunner(QThread):
         while not self._confirm_event.wait(0.05):
             if self._stopping:
                 raise NodeStoppedError("workflow stopped")
+            if self._workflow is not None and getattr(self._workflow, "_interrupt_requested", False):
+                # 停在确认弹窗时点了中断: 打断等待, 节点不执行, 主循环跑中断序列
+                raise NodeRedirectError("workflow interrupt requested")
         if self._stopping:
             raise NodeStoppedError("workflow stopped")
         return self._confirm_result
@@ -440,6 +420,9 @@ class WorkflowRunner(QThread):
         while not self._result_event.wait(0.05):
             if self._stopping:
                 raise NodeStoppedError("workflow stopped")
+            if self._workflow is not None and getattr(self._workflow, "_interrupt_requested", False):
+                # 停在结果弹窗时点了中断: 打断等待, 主循环跑中断序列
+                raise NodeRedirectError("workflow interrupt requested")
         if self._stopping:
             raise NodeStoppedError("workflow stopped")
         return self._result_result
@@ -483,7 +466,13 @@ class _EnterKeyBlocker(QObject):
 
 
 class SelectBranchDialog(QDialog):
-    """分支选择对话框: ListWidget 大字体显示, 只展示节点名称."""
+    """分支选择对话框: ListWidget 大字体显示, 只展示节点名称.
+
+    决策弹窗: 禁用标题栏 X 与 Esc/关闭, 避免误关后流程停在选择等待无处重选;
+    退出走弹窗内红色的"中断试验"按钮 (interrupt_requested 信号, 接面板公共方法).
+    """
+
+    interrupt_requested = Signal()
 
     # 分支节点状态 -> ListWidgetItem 背景色映射
     # 未列出 (待执行 / 执行中 / 停止) 走默认白底
@@ -495,6 +484,7 @@ class SelectBranchDialog(QDialog):
     def __init__(self, node_name: str, choices: list[dict[str, str]], parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("选择试验流程")
+        self.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, False)
         self.setMinimumSize(500, 600)
         self.resize(500, 600)
 
@@ -555,6 +545,13 @@ class SelectBranchDialog(QDialog):
         root.addWidget(custom_frame)
 
         buttons = QHBoxLayout()
+        interrupt_btn = QPushButton("中断试验", self)
+        interrupt_btn.setObjectName("selectDialogBtnInterrupt")
+        interrupt_btn.setStyleSheet("background: #e53935; color: white; border: none; border-radius: 6px; padding: 8px 16px; font-weight: bold;")
+        interrupt_btn.setDefault(False)
+        interrupt_btn.setAutoDefault(False)
+        interrupt_btn.clicked.connect(self.interrupt_requested.emit)
+        buttons.addWidget(interrupt_btn)
         buttons.addStretch(1)
         ok_btn = QPushButton("确认", self)
         ok_btn.setObjectName("selectDialogBtnPrimary")
@@ -624,6 +621,14 @@ class SelectBranchDialog(QDialog):
 
     def selected_id(self) -> str | None:
         return self._selected_id
+
+    def closeEvent(self, event) -> None:  # type: ignore[override]
+        """屏蔽直接关闭: 忽略所有 close 事件 (X / Alt+F4 / 系统菜单)."""
+        event.ignore()
+
+    def reject(self) -> None:  # type: ignore[override]
+        """屏蔽 Esc 引发的 reject: 弹窗保持打开."""
+        pass
 
     def _on_custom_press(self) -> None:
         raw = self._pressure_edit.text().strip()
@@ -863,14 +868,6 @@ class CreateJobConfirmDialog(QDialog):
         )
 
 
-class _LoopCountDialog(QInputDialog):
-    """循环次数输入弹窗: 屏蔽取消按钮与标题栏关闭, 只能输入后确认;
-    退出流程走主页"中断试验"."""
-
-    def reject(self) -> None:
-        pass
-
-
 class WorkflowRuntimePanel(QWidget):
     state_changed = Signal(str, str)
     running_changed = Signal(bool)
@@ -883,7 +880,6 @@ class WorkflowRuntimePanel(QWidget):
         self.runner: WorkflowRunner | None = None
         self._wait_dialog: WaitCountdownDialog | None = None
         self._select_dialog: SelectBranchDialog | None = None
-        self._loop_dialog: QInputDialog | None = None
         self._confirm_dialog: ConfirmDialog | None = None
         self._result_dialog: ResultDialog | None = None
         self.show_data = show_data
@@ -1020,7 +1016,6 @@ class WorkflowRuntimePanel(QWidget):
         self.runner.data_event.connect(self._handle_data_event)
         self.runner.state_event.connect(self._handle_state)
         self.runner.select_request.connect(self._request_selection)
-        self.runner.loop_request.connect(self._request_loop_count)
         self.runner.confirm_request.connect(self._request_confirmation)
         self.runner.result_request.connect(self._show_result_dialog)
         self.runner.interrupt_prompt_request.connect(self._request_interrupt_prompt)
@@ -1058,6 +1053,11 @@ class WorkflowRuntimePanel(QWidget):
         logger.info("试验流程中断: 挂起后跑中断序列")
         self.state_label.setText("状态: 正在中断处理…")
         workflow.request_interrupt()
+        # 撤掉可能停着的决策弹窗 (确认/结果/选择): _close_* 先断开 finished,
+        # 不触发停止、不提交答复; 等待循环认到中断请求后打断, 序列随即跑起来
+        self._close_confirm_dialog()
+        self._close_result_dialog()
+        self._close_select_dialog()
         return True
 
     def _request_interrupt_prompt(self, question: str) -> None:
@@ -1078,7 +1078,6 @@ class WorkflowRuntimePanel(QWidget):
     def shutdown(self, timeout_ms: int = 3000) -> None:
         self._close_wait_dialog()
         self._close_select_dialog()
-        self._close_loop_dialog()
         self._close_confirm_dialog()
         self._close_result_dialog()
         runner = self.runner
@@ -1228,6 +1227,7 @@ class WorkflowRuntimePanel(QWidget):
         self._select_dialog = dialog
         dialog.setModal(False)
         dialog.setWindowModality(Qt.WindowModality.NonModal)
+        dialog.interrupt_requested.connect(self.interrupt_workflow)
 
         def handle_finished(result: int) -> None:
             if self._select_dialog is not dialog:
@@ -1246,59 +1246,11 @@ class WorkflowRuntimePanel(QWidget):
         dialog.raise_()
         dialog.activateWindow()
 
-    def _request_loop_count(self, node_id: str, node_name: str) -> None:
-        if self.runner is None:
-            return
-        self._close_loop_dialog()
-        dialog = _LoopCountDialog(self)
-        self._loop_dialog = dialog
-        dialog.setWindowTitle("输入循环次数")
-        dialog.setLabelText(f"{node_name} ({node_id})\n请输入循环次数")
-        dialog.setInputMode(QInputDialog.InputMode.IntInput)
-        dialog.setIntRange(1, 9999)
-        dialog.setIntStep(1)
-        dialog.setIntValue(1)
-        dialog.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, False)
-        dialog.setModal(False)
-        dialog.setWindowModality(Qt.WindowModality.NonModal)
-
-        def handle_finished(result: int) -> None:
-            if self._loop_dialog is not dialog:
-                dialog.deleteLater()
-                return
-            self._loop_dialog = None
-            runner = self.runner
-            accepted = result == QDialog.Accepted
-            if runner is not None:
-                if not accepted:
-                    runner.stop()
-                    runner.submit_loop_count(None)
-                else:
-                    runner.submit_loop_count(int(dialog.intValue()))
-            dialog.deleteLater()
-
-        dialog.finished.connect(handle_finished)
-        dialog.show()
-        dialog.raise_()
-        dialog.activateWindow()
-
     def _close_select_dialog(self) -> None:
         if self._select_dialog is None:
             return
         dialog = self._select_dialog
         self._select_dialog = None
-        try:
-            dialog.finished.disconnect()
-        except (TypeError, RuntimeError):
-            pass
-        dialog.close()
-        dialog.deleteLater()
-
-    def _close_loop_dialog(self) -> None:
-        if self._loop_dialog is None:
-            return
-        dialog = self._loop_dialog
-        self._loop_dialog = None
         try:
             dialog.finished.disconnect()
         except (TypeError, RuntimeError):
@@ -1361,6 +1313,7 @@ class WorkflowRuntimePanel(QWidget):
         self._close_confirm_dialog()
         dialog = ConfirmDialog(node_name, info, self)
         self._confirm_dialog = dialog
+        dialog.interrupt_requested.connect(self.interrupt_workflow)
 
         def handle_finished(result: int) -> None:
             if self._confirm_dialog is not dialog:
@@ -1396,10 +1349,12 @@ class WorkflowRuntimePanel(QWidget):
             self,
             read_only=not editable,
             meta=dict(getattr(self.workflow, "meta", {}) or {}),
+            show_interrupt_button=True,
         )
         self._result_dialog = dialog
         dialog.setModal(False)
         dialog.setWindowModality(Qt.WindowModality.NonModal)
+        dialog.interrupt_requested.connect(self.interrupt_workflow)
 
         def handle_finished(result: int) -> None:
             if self._result_dialog is not dialog:
@@ -1446,7 +1401,6 @@ class WorkflowRuntimePanel(QWidget):
     def _on_runner_finished(self) -> None:
         self._close_wait_dialog()
         self._close_select_dialog()
-        self._close_loop_dialog()
         self._close_confirm_dialog()
         self._close_result_dialog()
         self._set_running_ui(False)

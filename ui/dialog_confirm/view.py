@@ -2,12 +2,13 @@
 流程步骤执行确认对话框
 
 - 屏蔽直接关闭: 标题栏 X 按钮 + closeEvent 都被禁用
-- 唯一按钮: "确认执行" (蓝色); 不提供中止入口, 退出流程走主页"中断试验"
+- 两个按钮: "确认执行" (蓝色) 与 "中断试验" (红色, 发 interrupt_requested 信号,
+  接面板公共中断方法, 不走 finished 结果通道)
 - 非模态: 通过 finished 信号异步回调, 由调用方负责 deleteLater
 """
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
@@ -18,6 +19,8 @@ class ConfirmDialog(QDialog):
     行为约束:
     - 不允许用户通过标题栏关闭按钮直接关闭 (屏蔽 X + closeEvent 始终 ignore)
     - 只能通过 "确认执行" 返回结果 (Esc 的 reject 同样被屏蔽)
+    - "中断试验" 红色按钮发 interrupt_requested 信号 (不返回结果、不触发停止),
+      由调用方接面板公共中断方法; 中断时调用方负责撤掉本弹窗
     - 非模态, 与主窗口可交互; 通过 finished 信号异步回调
 
     使用示例:
@@ -29,6 +32,8 @@ class ConfirmDialog(QDialog):
     - QDialog.Accepted -> 用户点击 "确认执行"
     - QDialog.Rejected -> 不再由用户操作触发 (仅程序内部关闭时)
     """
+
+    interrupt_requested = Signal()
 
     def __init__(self, node_name: str, info: str = "", parent=None) -> None:
         super().__init__(parent)
@@ -110,8 +115,26 @@ class ConfirmDialog(QDialog):
         )
         self._confirm_btn.clicked.connect(self.accept)
 
+        # 中断试验 -> 红色: 只发信号, 不走 accept/reject/finished (避免触发停止)
+        self._interrupt_btn = QPushButton("中断试验", self)
+        self._interrupt_btn.setMinimumHeight(44)
+        self._interrupt_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._interrupt_btn.setDefault(False)
+        self._interrupt_btn.setAutoDefault(False)
+        self._interrupt_btn.setStyleSheet(
+            "QPushButton {"
+            " background: #e53935;"
+            " color: white; border: none; border-radius: 6px;"
+            " font-size: 15px; font-weight: 600; padding: 0 24px;"
+            "}"
+            "QPushButton:hover { background: #c62828; }"
+            "QPushButton:pressed { background: #b71c1c; }"
+        )
+        self._interrupt_btn.clicked.connect(self.interrupt_requested.emit)
+
         button_row.addWidget(self._confirm_btn)
         button_row.addStretch(1)
+        button_row.addWidget(self._interrupt_btn)
         layout.addLayout(button_row)
 
         self.setStyleSheet(

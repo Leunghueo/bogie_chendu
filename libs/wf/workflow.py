@@ -19,7 +19,7 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - fallback for package imports
     from libs.jobstore import local_now as _job_local_now, upsert_snapshot as _job_upsert_snapshot
 from .base import EventEmitter, NodeRedirectError, NodeStoppedError, WorkflowError, WorkflowState, utc_now
-from .node import ConfirmHandler, InterruptPromptHandler, LoopHandler, Node, ResultHandler, SelectHandler
+from .node import ConfirmHandler, InterruptPromptHandler, Node, ResultHandler, SelectHandler
 
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,6 @@ class Workflow:
         rawdata: dict[str,Any], 
         *,
         select_handler: SelectHandler | None = None,
-        loop_handler: LoopHandler | None = None,
         confirm_handler: ConfirmHandler | None = None,
         result_handler: ResultHandler | None = None,
         interrupt_prompt_handler: InterruptPromptHandler | None = None,
@@ -60,7 +59,6 @@ class Workflow:
         self._running_loop: asyncio.AbstractEventLoop | None = None
         self._running_task: asyncio.Task[Any] | None = None
         self.select_handler = select_handler
-        self.loop_handler = loop_handler
         self.confirm_handler = confirm_handler
         self.result_handler = result_handler
         self.interrupt_prompt_handler = interrupt_prompt_handler

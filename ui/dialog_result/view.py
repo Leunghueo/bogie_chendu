@@ -277,6 +277,7 @@ class ResultDialog(QDialog):
     """
 
     confirmed = Signal(bool)
+    interrupt_requested = Signal()
 
     # 列索引常量
     COL_NAME = 0
@@ -296,6 +297,7 @@ class ResultDialog(QDialog):
         refresh_callback=None,
         curves: dict | None = None,
         meta: dict | None = None,
+        show_interrupt_button: bool = False,
     ) -> None:
         """
         初始化试验结果对话框
@@ -313,6 +315,10 @@ class ResultDialog(QDialog):
                 可编辑模式下确认后写入 self.meta 供调用方落盘 (实时模式还会
                 同步回 workflow.meta 并重算工单名); 只读模式下仅展示.
                 为 None 时不显示该行.
+            show_interrupt_button: 流程内等待确认时为 True (仅实时模式调用方传):
+                显示红色"中断试验"按钮 (发 interrupt_requested 信号, 不走
+                finished 结果通道), 并禁用关闭 (与 _live_mode 同一待遇);
+                只读的实时节点也会显示"确认"按钮作为继续出口 (确认不写回).
         """
         super().__init__(parent)
         self.setWindowTitle("试验结果")
@@ -333,9 +339,12 @@ class ResultDialog(QDialog):
         self._curves_arg = curves
         self._curve_plots: dict[str, object] = {}
         # 实时模式 (流程内等待确认: 无 result_store 且非只读): 取消/关闭会让流程
-        # 收到未确认而停止, 故屏蔽取消按钮、标题栏 X 与 Esc; 退出走主页"中断试验"
+        # 收到未确认而停止, 故屏蔽取消按钮、标题栏 X 与 Esc; 退出走"中断试验"
+        # (主页按钮或弹窗内红色按钮). show_interrupt_button 覆盖只读实时节点
+        # (editable=false), 同样按等待确认对待.
         self._live_mode = result_store is None and not read_only
-        if self._live_mode:
+        self._show_interrupt_button = show_interrupt_button
+        if self._live_mode or show_interrupt_button:
             self.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, False)
         self._build_ui(test_result)
 
@@ -424,7 +433,7 @@ class ResultDialog(QDialog):
         self.confirm_btn.setDefault(True)
         self.cancel_btn = QPushButton("取消", self)
 
-        if self._read_only:
+        if self._read_only and not self._show_interrupt_button:
             self.confirm_btn.hide()
             self.cancel_btn.setText("关闭")
             if self._refresh_callback is not None:
@@ -432,8 +441,21 @@ class ResultDialog(QDialog):
                 self.refresh_btn.clicked.connect(self._on_refresh)
                 button_layout.addWidget(self.refresh_btn)
 
-        if self._live_mode:
+        if self._live_mode or self._show_interrupt_button:
             self.cancel_btn.hide()
+
+        if self._show_interrupt_button:
+            # 中断试验 -> 红色: 只发信号, 不走 _finish/finished (避免触发停止)
+            self.interrupt_btn = QPushButton("中断试验", self)
+            self.interrupt_btn.setDefault(False)
+            self.interrupt_btn.setAutoDefault(False)
+            self.interrupt_btn.setStyleSheet(
+                "QPushButton { background-color: #e53935; color: #ffffff; font-weight: 600; }"
+                "QPushButton:hover { background-color: #c62828; }"
+                "QPushButton:pressed { background-color: #b71c1c; }"
+            )
+            self.interrupt_btn.clicked.connect(self.interrupt_requested.emit)
+            button_layout.addWidget(self.interrupt_btn)
 
         button_layout.addStretch()
         button_layout.addWidget(self.confirm_btn)
@@ -514,10 +536,17 @@ class ResultDialog(QDialog):
         return plot
 
     def reject(self) -> None:
-        """实时模式屏蔽 Esc/系统关闭引发的 reject (见 __init__ 的 _live_mode 说明)."""
-        if self._live_mode:
+        """等待确认时屏蔽 Esc/系统关闭引发的 reject (见 __init__ 的说明)."""
+        if self._live_mode or self._show_interrupt_button:
             return
         super().reject()
+
+    def closeEvent(self, event) -> None:  # type: ignore[override]
+        """等待确认时屏蔽直接关闭 (Alt+F4 / 系统菜单); 程序内部撤掉走 deleteLater."""
+        if self._live_mode or self._show_interrupt_button:
+            event.ignore()
+            return
+        super().closeEvent(event)
 
     def _load_checker_candidates(self) -> None:
         """加载互检员候选: 用户数据库(TblUser)用户名, 首项为空.
