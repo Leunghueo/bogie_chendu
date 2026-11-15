@@ -2016,12 +2016,17 @@ class Window(QWidget):
         logger.info(f"从作业库恢复工单: Name={workflow.name}")
         return True
 
-    def _refresh_workflow_actions(self) -> None:
+    def _refresh_workflow_actions(self, running: bool | None = None) -> None:
         """按当前选中任务刷新开始按钮: 未开始/已停止的工单可开始.
-        删除已移至历史页 (仅管理员), 主页不再提供删除入口."""
+        删除已移至历史页 (仅管理员), 主页不再提供删除入口.
+
+        running 由 running_changed 信号带入时最准 (开始/结束瞬间
+        is_running() 尚在翻转中); 不带参则现场取 is_running() 派生.
+        """
         if not hasattr(self, "start_flow_btn"):
             return
-        running = self.workflow_panel.is_running()
+        if running is None:
+            running = self.workflow_panel.is_running()
         instance = self._current_workflow_instance()
         startable = False
         if instance is not None:
@@ -2456,7 +2461,7 @@ class Window(QWidget):
         self.stop_flow_btn.setEnabled(running)
         self.select_cmd_btn.setEnabled(running)
         self.terminate_flow_btn.setEnabled(running)
-        self._refresh_workflow_actions()
+        self._refresh_workflow_actions(running)
         self._refresh_status_bar()
 
     def _on_workflow_state_changed(self, state: str, error_message: str) -> None:
@@ -2476,7 +2481,30 @@ class Window(QWidget):
         # 在同一条作业记录上继续 (logs/summary 按本次运行整块刷新)
         if instance["workflow"].state not in (WorkflowState.IDLE, WorkflowState.STOPPED):
             return
+        if not self._plc_auto_enabled():
+            QMessageBox.warning(
+                self,
+                "无法开始试验",
+                "PLC 未处于自动模式 (自动≠true)，请切换到自动模式后再开始试验。",
+            )
+            return
         self.workflow_panel.start_workflow()
+
+    def _plc_auto_enabled(self) -> bool:
+        """开始试验的 PLC 联锁: 自动点必须读到 true.
+
+        自动为输入 BOOL 点, read 返回 Python bool (轮询缓存, 缺字时
+        补一次 poll_once, 仍读不到抛 IOError). 读不到 (PLC 未接/点缺失/
+        通讯失败) 一律按未启用处理, 宁可拦下不可放行.
+        """
+        plc = self.runtime.get("plc")
+        if plc is None:
+            return False
+        try:
+            return plc.read("自动") is True
+        except Exception:
+            logger.exception("读取 PLC 自动点失败")
+            return False
 
     def _stop_workflow(self) -> None:
         self.workflow_panel.stop_workflow()
