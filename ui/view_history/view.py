@@ -32,13 +32,17 @@ from libs.wf.base import WorkflowState, utc_now
 
 logger = logging.getLogger(__name__)
 
+
+class _NoJobData(Exception):
+    """作业没有 summary 结果数据, 无法上传 (批量时记为跳过, 不记失败)."""
+
 # 作业记录自 bogie.db 的 TblFlowJob 表读取 (一行一次作业, 见 libs/jobstore.py):
 # summary / meta / air_curve 都是行上的独立字段, 不再扫描日志文件推导.
 
 _RESULT_KEYS = ["测量值", "最小值", "最大值", "单位", "结论"]
 _RESULT_HEADERS = ["项目", "测量值", "最小值", "最大值", "单位", "结论"]
 
-_LOG_LIST_HEADERS = ["日期", "类型", "名称", "ID", "上传EMIS"]
+_LOG_LIST_HEADERS = ["日期", "类型", "名称", "ID", "上传状态"]
 
 def _summary_rows(job: dict[str, Any] | None) -> list[dict[str, Any]]:
     """把作业的 summary 字段展开为结果表格行.
@@ -346,6 +350,7 @@ class Window(QWidget):
         self.log_table.horizontalHeader().setStretchLastSection(True)
         self.log_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.log_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.log_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.log_table.setAlternatingRowColors(True)
         self.log_table.verticalHeader().setVisible(False)
         self.log_table.itemSelectionChanged.connect(self._on_log_selected)
@@ -467,7 +472,7 @@ class Window(QWidget):
                     "type": str(job.get("type") or meta.get("流程") or ""),
                     "name": str(job.get("name") or ""),
                     "id": job_id[:8],
-                    "emis_uploaded": bool(job.get("emis_uploaded")),
+                    "uploaded": str(job.get("uploaded") or ""),
                 }
             )
         self._on_search()
@@ -485,13 +490,13 @@ class Window(QWidget):
         self.log_table.setRowCount(0)
         for row_index, log_info in enumerate(logs):
             self.log_table.insertRow(row_index)
-            emis_status = "已上传" if log_info.get("emis_uploaded") else "未上传"
+            upload_status = jobstore.upload_status_text(log_info.get("uploaded"))
             values = [
                 log_info.get("date", ""),
                 log_info.get("type", ""),
                 log_info.get("name", ""),
                 log_info.get("id", ""),
-                emis_status,
+                upload_status,
             ]
             for col_index, value in enumerate(values):
                 item = QTableWidgetItem(str(value))
@@ -501,8 +506,8 @@ class Window(QWidget):
                     # 作业 id 不单独展示, 存入首列的数据角色供后续取用
                     item.setData(Qt.ItemDataRole.UserRole, log_info.get("job_id", ""))
                 if col_index == 4:
-                    # 上传状态列居中显示, 已上传用绿色加粗
-                    if log_info.get("emis_uploaded"):
+                    # 上传状态列居中显示, 已知目标全部传完用绿色加粗
+                    if jobstore.upload_all_done(log_info.get("uploaded")):
                         item.setForeground(Qt.GlobalColor.darkGreen)
                         font = item.font()
                         font.setBold(True)
@@ -820,143 +825,182 @@ class Window(QWidget):
         logger.info("补录数据成功: %s", job_id)
         QMessageBox.information(self, "补录成功", "数据已补录并保存")
 
-    def _on_upload_emis(self) -> None:
-        """上传当前选中作业的 summary 数据到 EMIS.
+    def _selected_jobs(self) -> list[dict[str, Any]]:
+        """当前选中的作业 (按行号去重排序, 供批量上传用)."""
+        rows = sorted({item.row() for item in self.log_table.selectedItems()})
+        jobs = []
+        for row in rows:
+            job = self._jobs_by_id.get(self._job_id_at_row(row))
+            if job is not None:
+                jobs.append(job)
+        return jobs
 
-        数据完全来自作业库行, 不依赖运行中的 workflow.
-        试验时间: 起始取作业创建时间, 结束取作业完成时间.
-        """
-        from PySide6.QtWidgets import QMessageBox
-        from libs.push.all import PushConfigError, emis
+    def _upload_one_emis(self, job: dict[str, Any]) -> None:
+        """上传单个作业到 EMIS; 成功则记 uploaded, 失败抛错."""
+        from libs.push.all import emis
 
-        selected = self.log_table.selectedItems()
-        if not selected:
-            QMessageBox.warning(self, "提示", "请先在搜索结果列表中选择一条作业记录")
-            return
-        job = self._current_job()
-        if job is None:
-            return
         job_id = str(job.get("id") or "")
-
         result_data = _job_result_data(job)
         if not result_data:
-            QMessageBox.warning(self, "提示", "该作业中没有 summary 结果数据, 无法上传")
-            return
+            raise _NoJobData("该作业中没有 summary 结果数据, 无法上传")
         meta = _job_meta(job)
-        # 空簧保压曲线 (无 air_curve 时为 {}, 上传时 khbyLine1/2 为空)
         air_curves = _job_air_curves(job)
-
         check_start = str(job.get("created_at") or "") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         check_end = str(job.get("finished_at") or "") or check_start
-
+        emis(
+            summary=result_data,
+            meta=meta,
+            check_start=check_start,
+            check_end=check_end,
+            air_curves=air_curves or None,
+        )
+        # 记 uploaded (替换 emis 段, 只记最后一笔), 并把上传条目并入 logs 留痕
         try:
-            emis(
-                summary=result_data,
-                meta=meta,
-                check_start=check_start,
-                check_end=check_end,
-                air_curves=air_curves or None,
+            jobstore.mark_uploaded(
+                self._job_db_path(),
+                job_id,
+                target="emis",
+                entry={
+                    "消息源": "emis",
+                    "event": "upload",
+                    "timestamp": utc_now(),
+                    "state": "完成",
+                },
             )
-            # 在作业行上置 EMIS 已上传标志, 并把上传条目并入 logs 留痕
-            try:
-                jobstore.mark_emis_uploaded(
-                    self._job_db_path(),
-                    job_id,
-                    entry={
-                        "消息源": "emis",
-                        "event": "upload",
-                        "timestamp": utc_now(),
-                        "state": "完成",
-                    },
-                )
-            except Exception:
-                logger.exception("写入 EMIS 上传记录到作业库失败: %s", job_id)
-            # 刷新列表, 让当前行的"上传EMIS"列即时显示为"已上传"
-            self._refresh_logs()
-            logger.info("上传 EMIS 成功: %s", job_id)
-            QMessageBox.information(self, "上传成功", "数据成功上传EMIS")
-        except PushConfigError as exc:
-            # 配置问题(文件缺失/JSON 非法), 与网络上报失败区分开
-            logger.exception("上传 EMIS 失败(推送配置错误), 作业: %s", job_id)
-            QMessageBox.critical(
-                self,
-                "推送配置错误",
-                f"{exc}\n\n该错误已记录到当天日志",
-            )
-        except RuntimeError as exc:
-            logger.exception("上传 EMIS 失败, 作业: %s", job_id)
-            message = str(exc)
-            # S_REFUSED 属于"调用成功但数据不被接受", 用警示而非错误样式
-            if "S_REFUSED" in message:
-                QMessageBox.warning(
-                    self,
-                    "上传被拒绝",
-                    f"EMIS 返回 S_REFUSED：\n接口调用成功, 数据或操作不被接受\n\n"
-                    f"{message}\n\n该错误已记录到当天日志",
-                )
-            else:
-                QMessageBox.critical(
-                    self, "上传失败", f"{message}\n\n该错误已记录到当天日志"
-                )
+        except Exception:
+            logger.exception("写入 EMIS 上传记录到作业库失败: %s", job_id)
+        logger.info("上传 EMIS 成功: %s", job_id)
 
-    def _on_upload_isdp(self) -> None:
-        """上传当前选中作业的 summary 数据到 ISDP.
+    def _upload_one_isdp(self, job: dict[str, Any]) -> str:
+        """上传单个作业到 ISDP; 成功返回应答详情, 失败抛错."""
+        from libs.push.isdp import isdp
 
-        数据完全来自作业库行, 不依赖运行中的 workflow.
-        任务编号取作业名, 试验结束时间取作业完成时间, 操作员取作业 user;
-        应答 resCode == "0" 为成功, 提示中带回 resMsg / reqId.
-        """
-        from PySide6.QtWidgets import QMessageBox
-        from libs.push.isdp import PushConfigError, isdp
-
-        selected = self.log_table.selectedItems()
-        if not selected:
-            QMessageBox.warning(self, "提示", "请先在搜索结果列表中选择一条作业记录")
-            return
-        job = self._current_job()
-        if job is None:
-            return
         job_id = str(job.get("id") or "")
-
         result_data = _job_result_data(job)
         if not result_data:
-            QMessageBox.warning(self, "提示", "该作业中没有 summary 结果数据, 无法上传")
-            return
+            raise _NoJobData("该作业中没有 summary 结果数据, 无法上传")
         meta = _job_meta(job)
-
         check_end = (
             str(job.get("finished_at") or "")
             or str(job.get("created_at") or "")
             or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         )
         operator = str(job.get("user") or meta.get("用户") or "")
-
+        result = isdp(
+            summary=result_data,
+            meta=meta,
+            task_no=str(job.get("name") or job_id),
+            check_end=check_end,
+            operator=operator,
+        )
+        # 记 uploaded (替换 isdp 段, 只记最后一笔), 并把上传条目并入 logs 留痕
         try:
-            result = isdp(
-                summary=result_data,
-                meta=meta,
-                task_no=str(job.get("name") or job_id),
-                check_end=check_end,
-                operator=operator,
+            jobstore.mark_uploaded(
+                self._job_db_path(),
+                job_id,
+                target="isdp",
+                entry={
+                    "消息源": "isdp",
+                    "event": "upload",
+                    "timestamp": utc_now(),
+                    "state": "完成",
+                },
             )
-            logger.info("上传 ISDP 成功: %s", job_id)
-            detail = str(result.get("resMsg") or "成功")
-            req_id = str(result.get("reqId") or "")
-            if req_id:
-                detail += f"\n请求编号: {req_id}"
-            QMessageBox.information(
-                self, "上传成功", f"数据成功上传ISDP\n服务器应答: {detail}"
-            )
-        except PushConfigError as exc:
-            # 配置问题(文件缺失/JSON 非法/缺少 isdp.token), 与网络上报失败区分开
-            logger.exception("上传 ISDP 失败(推送配置错误), 作业: %s", job_id)
-            QMessageBox.critical(
-                self,
-                "推送配置错误",
-                f"{exc}\n\n该错误已记录到当天日志",
-            )
-        except RuntimeError as exc:
-            logger.exception("上传 ISDP 失败, 作业: %s", job_id)
-            QMessageBox.critical(
-                self, "上传失败", f"{exc}\n\n该错误已记录到当天日志"
-            )
+        except Exception:
+            logger.exception("写入 ISDP 上传记录到作业库失败: %s", job_id)
+        logger.info("上传 ISDP 成功: %s", job_id)
+        detail = str(result.get("resMsg") or "成功")
+        req_id = str(result.get("reqId") or "")
+        if req_id:
+            detail += f"\n请求编号: {req_id}"
+        return detail
+
+    def _run_batch_upload(self, target: str) -> None:
+        """批量上传: 对选中的每条作业逐条上传, 最后汇总一次提示.
+
+        只选中一条时, 提示与原来单条上传完全一致; 有成功时刷新列表.
+        """
+        from PySide6.QtWidgets import QMessageBox
+
+        if target == "emis":
+            from libs.push.all import PushConfigError
+
+            upload_one = self._upload_one_emis
+            label = "EMIS"
+        else:
+            from libs.push.isdp import PushConfigError
+
+            upload_one = self._upload_one_isdp
+            label = "ISDP"
+        jobs = self._selected_jobs()
+        if not jobs:
+            QMessageBox.warning(self, "提示", "请先在搜索结果列表中选择一条作业记录")
+            return
+        outcomes: list[tuple[str, str, str]] = []  # (作业名, 结果, 详情)
+        for job in jobs:
+            name = str(job.get("name") or job.get("id") or "")
+            job_id = str(job.get("id") or "")
+            try:
+                detail = upload_one(job)
+                outcomes.append((name, "ok", detail if isinstance(detail, str) else ""))
+            except _NoJobData as exc:
+                outcomes.append((name, "skip", str(exc)))
+            except PushConfigError as exc:
+                logger.exception("上传 %s 失败(推送配置错误), 作业: %s", label, job_id)
+                outcomes.append((name, "config", str(exc)))
+            except RuntimeError as exc:
+                logger.exception("上传 %s 失败, 作业: %s", label, job_id)
+                kind = "refused" if "S_REFUSED" in str(exc) else "error"
+                outcomes.append((name, kind, str(exc)))
+        if any(kind == "ok" for _, kind, _ in outcomes):
+            self._refresh_logs()
+        if len(outcomes) == 1:
+            _, kind, detail = outcomes[0]
+            if kind == "ok":
+                if target == "emis":
+                    QMessageBox.information(self, "上传成功", "数据成功上传EMIS")
+                else:
+                    QMessageBox.information(self, "上传成功", f"数据成功上传ISDP\n服务器应答: {detail}")
+            elif kind == "skip":
+                QMessageBox.warning(self, "提示", detail)
+            elif kind == "config":
+                QMessageBox.critical(self, "推送配置错误", f"{detail}\n\n该错误已记录到当天日志")
+            elif kind == "refused":
+                QMessageBox.warning(
+                    self,
+                    "上传被拒绝",
+                    f"{label} 返回 S_REFUSED：\n接口调用成功, 数据或操作不被接受\n\n{detail}\n\n该错误已记录到当天日志",
+                )
+            else:
+                QMessageBox.critical(self, "上传失败", f"{detail}\n\n该错误已记录到当天日志")
+            return
+        ok_count = sum(1 for _, kind, _ in outcomes if kind == "ok")
+        lines = [f"成功 {ok_count} 条, 失败 {len(outcomes) - ok_count} 条:"]
+        for name, kind, detail in outcomes:
+            if kind == "ok":
+                lines.append(f"✓ {name}")
+            elif kind == "skip":
+                lines.append(f"✗ {name}: 无 summary 结果数据")
+            else:
+                lines.append(f"✗ {name}: {detail}")
+        if ok_count == len(outcomes):
+            QMessageBox.information(self, "批量上传完成", "\n".join(lines))
+        else:
+            QMessageBox.warning(self, "批量上传完成", "\n".join(lines))
+
+    def _on_upload_emis(self) -> None:
+        """上传选中作业的 summary 数据到 EMIS (可多选批量上传).
+
+        数据完全来自作业库行, 不依赖运行中的 workflow.
+        试验时间: 起始取作业创建时间, 结束取作业完成时间.
+        """
+        self._run_batch_upload("emis")
+
+    def _on_upload_isdp(self) -> None:
+        """上传选中作业的 summary 数据到 ISDP (可多选批量上传).
+
+        数据完全来自作业库行, 不依赖运行中的 workflow.
+        任务编号取作业名, 试验结束时间取作业完成时间, 操作员取作业 user;
+        应答 resCode == "0" 为成功, 提示中带回 resMsg / reqId.
+        """
+        self._run_batch_upload("isdp")
