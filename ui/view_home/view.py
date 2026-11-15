@@ -1002,9 +1002,8 @@ class WorkflowRuntimePanel(QWidget):
         self._error_message = ""
         self._state = "running"
         self._workflow_data = copy.deepcopy(self.workflow.data)
+        # 流水记录: 开始时空表, 节点开始执行时逐行追加
         self.node_table.setRowCount(0)
-        # 重新预填充节点表格，重置状态为"待运行"
-        self._node_rows_extend(self.workflow.get_node_list())
         self.state_label.setText("状态: running")
         self._render_data_text()
         self._set_running_ui(True)
@@ -1104,16 +1103,20 @@ class WorkflowRuntimePanel(QWidget):
 
     def _append_node_row(self, payload: dict) -> None:
         """
-        添加或更新节点行
-        如果预填充的表中已有该节点，则更新；否则追加新行
+        流水记录: 每次节点执行追加一行.
+        开始事件 (执行中) 一律追加新行; 结束事件更新同名最近一行仍在
+        执行中的行 (即本次执行建的行), 找不到则追加 (兜底).
         """
         node_name = payload.get("node_name", "")
-        # 查找是否已存在该节点的行
+        state = str(payload.get("state", ""))
         existing_row_index = -1
-        for i, row_data in enumerate(self._node_rows):
-            if row_data.get("node_name") == node_name:
-                existing_row_index = i
-                break
+        if state != WorkflowState.RUNNING.value:
+            # 结束事件: 倒序找同名最近一行仍在执行中的行
+            for i in range(len(self._node_rows) - 1, -1, -1):
+                row_data = self._node_rows[i]
+                if row_data.get("node_name") == node_name and str(row_data.get("state", "")) == WorkflowState.RUNNING.value:
+                    existing_row_index = i
+                    break
 
         if existing_row_index >= 0:
             # 更新已存在的行
@@ -1144,39 +1147,6 @@ class WorkflowRuntimePanel(QWidget):
         # 根据状态设置行颜色
         self._apply_row_state_color(row_index, payload.get("state", ""))
 
-    def _node_rows_extend(self, node_list: list[dict]) -> None:
-        """
-        批量添加节点行（用于预填充待运行的节点）
-
-        Args:
-            node_list: 节点列表
-        """
-        for node_info in node_list:
-            payload = self._make_pending_node_payload(node_info)
-            self._node_rows.append(payload)
-            self._insert_node_row(payload)
-
-    def _make_pending_node_payload(self, node_info: dict) -> dict:
-        """
-        创建待运行状态的节点数据
-
-        Args:
-            node_info: 节点信息，包含 node_id, node_name, node_type
-
-        Returns:
-            节点 payload 数据
-        """
-        return {
-            "node_id": node_info.get("node_id", ""),
-            "node_name": node_info.get("node_name", ""),
-            "node_type": node_info.get("node_type", ""),
-            "desc": node_info.get("desc", ""),
-            "state": "待运行",
-            "runtime": "",
-            "args": {},
-            "node_log": [],
-        }
-
     def _handle_data_event(self, workflow_data: object) -> None:
         self._workflow_data = copy.deepcopy(workflow_data) if isinstance(workflow_data, dict) else None
         self._render_data_text()
@@ -1187,10 +1157,16 @@ class WorkflowRuntimePanel(QWidget):
         node_args = payload.get("node_args")
         node_name = str(payload.get("node_name", ""))
         current_desc = ""
-        for row_data in self._node_rows:
-            if row_data.get("node_name") == node_name:
-                current_desc = str(row_data.get("desc", ""))
-                break
+        node_id = str(payload.get("node_id") or "")
+        if node_id and self.workflow is not None:
+            begin_node = self.workflow.nodes.get(node_id)
+            if begin_node is not None:
+                current_desc = str(getattr(begin_node, "desc", "") or "")
+        if not current_desc:
+            for row_data in self._node_rows:
+                if row_data.get("node_name") == node_name:
+                    current_desc = str(row_data.get("desc", ""))
+                    break
         self._append_node_row(
             {
                 "node_name": node_name,
@@ -1529,17 +1505,6 @@ class WorkflowRuntimePanel(QWidget):
         self.workflow._ui_node_rows = copy.deepcopy(self._node_rows)
         self.workflow._ui_state = self._state
         self.workflow._ui_error_message = self._error_message
-
-    def _prefill_node_table(self, node_list: list[dict]) -> None:
-        """
-        预填充节点表格，在运行前展示流程全貌
-
-        Args:
-            node_list: 节点列表，每个元素包含 node_id, node_name, node_type
-        """
-        self.node_table.setRowCount(0)
-        self._node_rows.clear()
-        self._node_rows_extend(node_list)
 
 class Window(QWidget):
 
@@ -2127,7 +2092,6 @@ class Window(QWidget):
                 self.runtime["wf"] = None
                 self.workflow_panel.set_workflow_instance(None)
                 self._refresh_current_flow_label()
-                self.workflow_panel._prefill_node_table([])
                 self._sync_flow_graph(None)
                 self._refresh_workflow_actions()
                 return
@@ -2138,9 +2102,6 @@ class Window(QWidget):
             self._apply_workflow_meta(job.get("meta") or {})
             self._refresh_current_flow_label()
             display_workflow = self._build_display_workflow(job)
-            self.workflow_panel._prefill_node_table(
-                display_workflow.get_node_list() if display_workflow is not None else []
-            )
             self._sync_flow_graph(display_workflow)
             self._refresh_workflow_actions()
             logger.info(f"查看作业记录: Name={job.get('name')}")
@@ -2151,7 +2112,6 @@ class Window(QWidget):
         self.workflow_panel.set_workflow_instance(workflow)
         self._apply_workflow_meta(workflow.meta)
         self._refresh_current_flow_label()
-        self.workflow_panel._prefill_node_table(workflow.get_node_list())
         self._sync_flow_graph(workflow)
         self._refresh_workflow_actions()
         logger.info(f"流程切换: Name={workflow.name}")
