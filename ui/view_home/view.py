@@ -2366,21 +2366,22 @@ class Window(QWidget):
             return
         self._load_workflow_list()
 
-    def _refresh_current_flow_label(self) -> None:
-        instance = self._current_workflow_instance()
-        if instance is not None:
-            name = str(instance["workflow"].name or "当前流程")
-            self.current_flow_label.setText(f"当前流程: {name}")
-            return
-        if self.current_workflow_id is not None:
-            job = self._db_jobs.get(str(self.current_workflow_id))
-            if job is not None:
-                state_text, _color = self._job_state_display(job)
-                self.current_flow_label.setText(
-                    f"当前流程: {job.get('name') or '当前流程'} ({state_text})"
-                )
+    def _refresh_current_flow_label(self, running: bool | None = None) -> None:
+        """当前工单标签只反映正在运行的试验单, 与选中的工单无关.
+
+        running 由 running_changed 信号带入 (开始/结束时刻最准, 此时
+        is_running() 尚在翻转中); 其余调用点不带参, 现场取 is_running().
+        未运行时显示 "-", 不显示选中工单的名字.
+        """
+        panel = getattr(self, "workflow_panel", None)
+        if running is None:
+            running = bool(panel is not None and panel.is_running())
+        if running and panel is not None and panel.workflow is not None:
+            name = str(getattr(panel.workflow, "name", "") or "")
+            if name:
+                self.current_flow_label.setText(f"当前工单: {name}")
                 return
-        self.current_flow_label.setText("当前流程: -")
+        self.current_flow_label.setText("当前工单: -")
 
     def _create_workflow(self) -> None:
         if self.workflow_panel.is_running():
@@ -2444,6 +2445,7 @@ class Window(QWidget):
         self._refresh_status_bar()
 
     def _on_workflow_running_changed(self, running: bool) -> None:
+        self._refresh_current_flow_label(running)
         self.create_flow_btn.setEnabled(not running)
         # 工单列表运行期间保持可用: 双击查看只读快照依赖它的鼠标事件;
         # 切换绑定有 _switch_workflow 的运行门, 开始按钮另有独立门控
