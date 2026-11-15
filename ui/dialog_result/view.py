@@ -6,6 +6,7 @@ from PySide6.QtCore import QEvent, Qt, Signal, Slot
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -86,7 +87,7 @@ def compose_job_name(meta: dict) -> str | None:
 
 
 class ResultTable(QTableWidget):
-    """试验结果表格: 支持回车后按 TAB 次序轮换编辑焦点"""
+    """试验结果表格: 支持回车后按 TAB 次序轮换编辑焦点, 到底停住不循环"""
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -95,7 +96,8 @@ class ResultTable(QTableWidget):
         self.read_only: bool = False  # 只读模式下回车不进入编辑 (由 ResultDialog 设置)
 
     def keyPressEvent(self, event) -> None:
-        """回车: 按当前行 TAB 值找到下一个轮换行, 激活其测量值并进入编辑"""
+        """回车: 按当前行 TAB 值找到下一个轮换行, 激活其测量值并进入编辑;
+        到最后一行 (或无 TAB 行) 时停住不循环, 吃掉回车."""
         if not self.read_only and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             current = self.currentRow()
             # 当前行 TAB 值; 不在轮换表中(或 TAB=-1)则从 0 开始
@@ -103,13 +105,11 @@ class ResultTable(QTableWidget):
                 (t for t, r in self.tab_rows.items() if r == current), -1
             )
             next_tab = cur_tab + 1
-            if next_tab not in self.tab_rows:
-                next_tab = 0  # 到达最大值后循环
             if next_tab in self.tab_rows:
                 row = self.tab_rows[next_tab]
                 self.setCurrentCell(row, self._dialog_col_std)
                 self.edit(self.model().index(row, self._dialog_col_std))
-                return
+            return
         super().keyPressEvent(event)
 
 
@@ -430,14 +430,20 @@ class ResultDialog(QDialog):
         button_layout = QHBoxLayout()
 
         self.confirm_btn = QPushButton("确认", self)
-        self.confirm_btn.setDefault(True)
+        # 确认只许点按钮: 不做默认按钮, 焦点也不接管默认 (回车只移焦点)
+        self.confirm_btn.setDefault(False)
+        self.confirm_btn.setAutoDefault(False)
         self.cancel_btn = QPushButton("取消", self)
+        self.cancel_btn.setDefault(False)
+        self.cancel_btn.setAutoDefault(False)
 
         if self._read_only and not self._show_interrupt_button:
             self.confirm_btn.hide()
             self.cancel_btn.setText("关闭")
             if self._refresh_callback is not None:
                 self.refresh_btn = QPushButton("刷新", self)
+                self.refresh_btn.setDefault(False)
+                self.refresh_btn.setAutoDefault(False)
                 self.refresh_btn.clicked.connect(self._on_refresh)
                 button_layout.addWidget(self.refresh_btn)
 
@@ -534,6 +540,36 @@ class ResultDialog(QDialog):
             if ys:
                 plot.plot(list(range(len(ys))), ys, pen=pg.mkPen(color, width=2), name=name)
         return plot
+
+    def keyPressEvent(self, event) -> None:  # type: ignore[override]
+        """回车只移焦点 (到底停住不循环), 绝不触发确认; 确认只许点按钮.
+
+        表格内的回车由 ResultTable 自己吃掉 (轮换编辑行), 到不了这里;
+        其余控件 (meta 编辑框/下拉/页签/按钮) 的回车都会冒泡到这里.
+        """
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self._focus_next_no_wrap()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def _focus_next_no_wrap(self) -> None:
+        """沿焦点链前进一位; 到达链尾停住, 不循环回开头."""
+        start = QApplication.focusWidget()
+        if start is None:
+            return
+        widget = start
+        while True:
+            widget = widget.nextInFocusChain()
+            if widget is start or widget is self:
+                return
+            if (
+                widget.isVisibleTo(self)
+                and widget.isEnabled()
+                and widget.focusPolicy() != Qt.FocusPolicy.NoFocus
+            ):
+                widget.setFocus(Qt.FocusReason.TabFocusReason)
+                return
 
     def reject(self) -> None:
         """等待确认时屏蔽 Esc/系统关闭引发的 reject (见 __init__ 的说明)."""
