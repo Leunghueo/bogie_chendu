@@ -1634,7 +1634,7 @@ class Window(QWidget):
         self.create_flow_btn.clicked.connect(self._create_workflow)
         action_row.addWidget(self.create_flow_btn)
         layout.addLayout(action_row)
-        layout.addWidget(QLabel("当前工单", panel))
+        layout.addWidget(QLabel("当日工单", panel))
         self.workflow_list = QTableWidget(0, 4, panel)
         self.workflow_list.setHorizontalHeaderLabels(["状态", "试验单号", "时间", "操作员"])
         self.workflow_list.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
