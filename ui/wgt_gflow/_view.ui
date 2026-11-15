@@ -3,64 +3,114 @@
  <class>Form</class>
  <widget class="QWidget" name="Form">
   <property name="geometry">
-   <rect><x>0</x><y>0</y><width>893</width><height>733</height></rect>
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>893</width>
+    <height>733</height>
+   </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
-  <widget class="QWidget" name="garea_head">
+  <widget class="QWidget" name="garea_head" native="true">
    <property name="geometry">
-    <rect><x>408</x><y>19</y><width>102</width><height>41</height></rect>
+    <rect>
+     <x>408</x>
+     <y>19</y>
+     <width>102</width>
+     <height>41</height>
+    </rect>
    </property>
   </widget>
-  <widget class="QWidget" name="garea_top">
+  <widget class="QWidget" name="garea_top" native="true">
    <property name="geometry">
-    <rect><x>408</x><y>69</y><width>102</width><height>143</height></rect>
+    <rect>
+     <x>408</x>
+     <y>69</y>
+     <width>102</width>
+     <height>143</height>
+    </rect>
    </property>
   </widget>
-  <widget class="QWidget" name="garea_2">
+  <widget class="QWidget" name="garea_5" native="true">
    <property name="geometry">
-    <rect><x>7</x><y>231</y><width>102</width><height>459</height></rect>
+    <rect>
+     <x>72</x>
+     <y>225</y>
+     <width>102</width>
+     <height>460</height>
+    </rect>
    </property>
   </widget>
-  <widget class="QWidget" name="garea_5">
+  <widget class="QWidget" name="garea_4" native="true">
    <property name="geometry">
-    <rect><x>119</x><y>230</y><width>102</width><height>460</height></rect>
+    <rect>
+     <x>182</x>
+     <y>225</y>
+     <width>102</width>
+     <height>460</height>
+    </rect>
    </property>
   </widget>
-  <widget class="QWidget" name="garea_4">
+  <widget class="QWidget" name="garea_3" native="true">
    <property name="geometry">
-    <rect><x>229</x><y>230</y><width>102</width><height>460</height></rect>
+    <rect>
+     <x>293</x>
+     <y>224</y>
+     <width>102</width>
+     <height>461</height>
+    </rect>
    </property>
   </widget>
-  <widget class="QWidget" name="garea_3">
+  <widget class="QWidget" name="garea_6" native="true">
    <property name="geometry">
-    <rect><x>340</x><y>229</y><width>102</width><height>461</height></rect>
+    <rect>
+     <x>408</x>
+     <y>225</y>
+     <width>102</width>
+     <height>460</height>
+    </rect>
    </property>
   </widget>
-  <widget class="QWidget" name="garea_6">
+  <widget class="QWidget" name="garea_7" native="true">
    <property name="geometry">
-    <rect><x>455</x><y>230</y><width>102</width><height>460</height></rect>
+    <rect>
+     <x>518</x>
+     <y>225</y>
+     <width>102</width>
+     <height>460</height>
+    </rect>
    </property>
   </widget>
-  <widget class="QWidget" name="garea_7">
+  <widget class="QWidget" name="garea_8" native="true">
    <property name="geometry">
-    <rect><x>565</x><y>230</y><width>102</width><height>460</height></rect>
+    <rect>
+     <x>629</x>
+     <y>225</y>
+     <width>102</width>
+     <height>460</height>
+    </rect>
    </property>
   </widget>
-  <widget class="QWidget" name="garea_8">
+  <widget class="QWidget" name="garea_9" native="true">
    <property name="geometry">
-    <rect><x>676</x><y>230</y><width>102</width><height>460</height></rect>
+    <rect>
+     <x>738</x>
+     <y>225</y>
+     <width>102</width>
+     <height>142</height>
+    </rect>
    </property>
   </widget>
-  <widget class="QWidget" name="garea_9">
+  <widget class="QWidget" name="garea_end" native="true">
    <property name="geometry">
-    <rect><x>785</x><y>230</y><width>102</width><height>142</height></rect>
-   </property>
-  </widget>
-  <widget class="QWidget" name="garea_end">
-   <property name="geometry">
-    <rect><x>785</x><y>391</y><width>102</width><height>41</height></rect>
+    <rect>
+     <x>737</x>
+     <y>375</y>
+     <width>102</width>
+     <height>41</height>
+    </rect>
    </property>
   </widget>
  </widget>
