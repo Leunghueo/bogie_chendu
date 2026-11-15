@@ -2006,7 +2006,11 @@ class Window(QWidget):
             {"id": workflow_id, "workflow": workflow, "flow_path": flow_path}
         )
         self._set_current_workflow(workflow_id)
-        self._load_workflow_list()
+        # 列表重载必须延迟到事件循环下一轮: 本函数运行在 currentItemChanged
+        # 信号投递途中, 同步重建列表会删掉正在发信号的 current 表项,
+        # 随后第二个槽收到悬空指针即段错误闪退 (2026-11-15 实测).
+        # singleShot(0) 在信号投递完成后再重建, 两个槽看到的都是活表项.
+        QTimer.singleShot(0, self._load_workflow_list)
         self._flow_graph._build_ui()
         self._flow_graph.update(workflow)
         logger.info(f"从作业库恢复工单: Name={workflow.name}")
