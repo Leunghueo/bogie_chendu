@@ -267,5 +267,9 @@
     },
     "caa": {
         "url": ""
+    },
+    "isdp":{
+        "token":"test",
+        "url":"http://10.194.96.177:8000/api/v3/equipmentData"
     }
 }

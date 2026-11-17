@@ -111,14 +111,14 @@ def _build_isdp_payload(
         "OnlineToken": token,
         "DeviceCode": str(bed.get("设备编号", "") or ""),
         "DataType": "DEVICEDATA",
-        "CheckData": {task_no: check_data},
+        "CheckData": check_data,
         "BasicInfo": {
             "DeviceName": str(bed.get("设备名称", "") or ""),
             "CheckTime": check_end,
             "TrnsetType": str(meta.get("车型", "") or ""),
             "TrnsetNo": str(meta.get("车号", "") or ""),
-            "TrnsetTrainNo": frame_no,
-            "PositionNo": frame_no,
+            "TrnsetTrainNo": str(meta.get("位号", "") or ""),
+            "PositionNo": str(meta.get("位号", "") or ""),
             "SerialNum": "",
             "OperatorName": operator,
             "OperatorID": "",
@@ -205,6 +205,7 @@ def isdp(
         raise RuntimeError(msg) from exc
 
     url = _isdp_url(cfg)
+    print(payload)
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(url, data=body, method="POST")
     req.add_header("Content-Type", "application/json; charset=UTF-8")
