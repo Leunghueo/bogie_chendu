@@ -206,7 +206,7 @@ def main() -> int:
         # 运行时插件: 扫描 runtime/plugin, 失败时按零插件继续, 绝不挡启动.
         # loader 在此局部导入: 即便 loader 自身损坏也不会影响程序 import 期.
         try:
-            from plugin_loader import load_plugin_entries
+            from plugin_loader import PLUGIN_GROUP_TITLE, load_plugin_entries
 
             _plugin_menus, _plugin_views = load_plugin_entries()
         except Exception:
@@ -214,8 +214,18 @@ def main() -> int:
             _plugin_menus, _plugin_views = [], {}
         if _plugin_menus:
             # 拷贝后合并: load_ui_registry 返回的是注册表模块级 dict 的引用,
-            # 直接改会污染模块状态.
-            ui_registry["menus"] = {**ui_registry["menus"], "插件": _plugin_menus}
+            # 直接改会污染模块状态. "插件" 组插在 "帮助" 组之前; 没有帮助组时
+            # 兜底追加到末尾.
+            _menus = {}
+            _inserted = False
+            for _group, _entries in ui_registry["menus"].items():
+                if _group == "帮助" and not _inserted:
+                    _menus[PLUGIN_GROUP_TITLE] = _plugin_menus
+                    _inserted = True
+                _menus[_group] = _entries
+            if not _inserted:
+                _menus[PLUGIN_GROUP_TITLE] = _plugin_menus
+            ui_registry["menus"] = _menus
             ui_registry["views"] = {**ui_registry["views"], **_plugin_views}
         main_window = MainFrame(
             menus=ui_registry["menus"],
