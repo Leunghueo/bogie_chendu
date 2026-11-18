@@ -203,6 +203,20 @@ def main() -> int:
             return 0
 
         ui_registry = runtime["ui_registry"]
+        # 运行时插件: 扫描 runtime/plugin, 失败时按零插件继续, 绝不挡启动.
+        # loader 在此局部导入: 即便 loader 自身损坏也不会影响程序 import 期.
+        try:
+            from plugin_loader import load_plugin_entries
+
+            _plugin_menus, _plugin_views = load_plugin_entries()
+        except Exception:
+            logger.exception("插件加载失败，已按零插件继续启动")
+            _plugin_menus, _plugin_views = [], {}
+        if _plugin_menus:
+            # 拷贝后合并: load_ui_registry 返回的是注册表模块级 dict 的引用,
+            # 直接改会污染模块状态.
+            ui_registry["menus"] = {**ui_registry["menus"], "插件": _plugin_menus}
+            ui_registry["views"] = {**ui_registry["views"], **_plugin_views}
         main_window = MainFrame(
             menus=ui_registry["menus"],
             views=ui_registry["views"],
