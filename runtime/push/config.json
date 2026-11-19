@@ -140,6 +140,106 @@
             "itemCode": "alarmState",
             "itemName": "告警状态",
             "itemValue": 0
+          },
+          {
+            "itemCode": "LoadF1",
+            "itemName": "加载压力 1",
+            "itemValue": 0
+          },
+          {
+            "itemCode": "LoadF2",
+            "itemName": "加载压力 2",
+            "itemValue": 0
+          },
+          {
+            "itemCode": "LoadDist1",
+            "itemName": "加载头垂向位移 1",
+            "itemValue": 0
+          },
+          {
+            "itemCode": "LoadDist2",
+            "itemName": "加载头垂向位移 2",
+            "itemValue": 0
+          },
+          {
+            "itemCode": "AirSpringP1",
+            "itemName": "空气弹簧气压 1",
+            "itemValue": 0
+          },
+          {
+            "itemCode": "AirSpringP2",
+            "itemName": "空气弹簧气压 2",
+            "itemValue": 0
+          },
+          {
+            "itemCode": "ParkingBrakePipelineP",
+            "itemName": "停放制动管路气压",
+            "itemValue": 0
+          },
+          {
+            "itemCode": "ServiceBrakePipelineP",
+            "itemName": "行车制动管路气压",
+            "itemValue": 0
+          },
+          {
+            "itemCode": "HydraulicStationP",
+            "itemName": "液压系统压力",
+            "itemValue": 0
+          },
+          {
+            "itemCode": "LoadP1",
+            "itemName": "加载液压压力 1",
+            "itemValue": 0
+          },
+          {
+            "itemCode": "LoadP2",
+            "itemName": "加载液压压力 2",
+            "itemValue": 0
+          },
+          {
+            "itemCode": "HydraulicStationTemp",
+            "itemName": "液压油温",
+            "itemValue": 0
+          },
+          {
+            "itemCode": "WheelDist1",
+            "itemName": "车轮内侧距 1",
+            "itemValue": 0
+          },
+          {
+            "itemCode": "WheelDist2",
+            "itemName": "车轮内侧距 2",
+            "itemValue": 0
+          },
+          {
+            "itemCode": "WheelDist3",
+            "itemName": "车轮内侧距 3",
+            "itemValue": 0
+          },
+          {
+            "itemCode": "WheelDist4",
+            "itemName": "车轮内侧距 4",
+            "itemValue": 0
+          },
+          {
+            "itemCode": "WW1",
+            "itemName": "轮重测量 1",
+            "itemValue": 0
+          },
+          {
+            "itemCode": "WW2",
+            "itemName": "轮重测量 2",
+            "itemValue": 0
+          },
+          {
+            "itemCode": "WW3",
+            "itemName": "轮重测量 3",
+            "itemValue": 0
+          },
+          {
+            "itemCode": "WW4",
+            "itemName": "轮重测量 4",
+            "itemValue": 0
           }
         ]
       }
