@@ -12,6 +12,7 @@ import logging
 import re
 import struct
 import time as time_module
+import uuid
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -21,6 +22,7 @@ from typing import Any
 import paho.mqtt.client as mqtt
 
 from _runtime import get_runtime
+from wf.base import WorkflowState
 
 logger = logging.getLogger(__name__)
 
@@ -54,26 +56,43 @@ class EmisResultError(PushError):
     """EMIS 接口返回了非 S_ACCEPTED 的统一结果码."""
 
 
-# iot attr_code -> plc.json pts key
-_IOT_PLC_KEYS: dict[str, str] = {
-    "LoadF1": "加载压力1",
-    "LoadF2": "加载压力2",
-    "LoadDist1": "加载头垂向位移1",
-    "LoadDist2": "加载头垂向位移2",
-    "LoadHorDist1": "加载头横向位移1",
-    "LoadHorDist2": "加载头横向位移2",
-    "AirSpringP1": "气压采集1",
-    "AirSpringP2": "气压采集2",
-    "HydraulicStationP": "液压系统压力",
-    "HydraulicStationTemp": "液压油温",
-    "WW1": "轮重测量1",
-    "WW2": "轮重测量2",
-    "WW3": "轮重测量3",
-    "WW4": "轮重测量4",
-    "railHeight1": "举升轨高度1",
-    "railHeight2": "举升轨高度2",
-    "railHeight3": "举升轨高度3",
-    "railHeight4": "举升轨高度4",
+# iot itemCode -> (数据源, 点位名)
+# 数据源: "plc" | "vsp" | "can", 点位名是对应硬件 json 里的 pts key;
+# "none" 表示暂无对应点位, 推送时保留模板原值.
+# 来源若标错, 只改这一张表, 不用动填充逻辑.
+_IOT_SOURCES: dict[str, tuple[str, str]] = {
+    # 加载力 / 加载头垂向位移: plc (旧 _IOT_PLC_KEYS 沿用)
+    "LoadF1": ("plc", "加载压力1"),
+    "LoadF2": ("plc", "加载压力2"),
+    "LoadDist1": ("plc", "加载头垂向位移1"),
+    "LoadDist2": ("plc", "加载头垂向位移2"),
+    # 空气弹簧气压: plc 气压采集1/2 (旧映射沿用)
+    "AirSpringP1": ("plc", "气压采集1"),
+    "AirSpringP2": ("plc", "气压采集2"),
+    # 制动管路气压: plc 上只剩气压采集3/4 两个空闲气压通道, 3=停放、4=行车
+    # 是按通道顺序的推断, 代码和流程里没有任何一处读过这两个点, 若反了把两行对调.
+    # 另注意: plc.json 里气压采集3/4 没有配换算 (1/2 是 0@0/10000@1000),
+    # 读出来是 0-10000 原始值而不是 kPa, 需在 plc.json 补上同样换算才对.
+    "ParkingBrakePipelineP": ("plc", "气压采集3"),
+    "ServiceBrakePipelineP": ("plc", "气压采集4"),
+    # 液压系统压力 / 油温: plc (旧映射沿用)
+    "HydraulicStationP": ("plc", "液压系统压力"),
+    "HydraulicStationTemp": ("plc", "液压油温"),
+    # 加载液压压力: plc/vsp/can 里都没有这个点位, 暂无来源, 保留模板值.
+    "LoadP1": ("none", ""),
+    "LoadP2": ("none", ""),
+    # 车轮内侧距: plc 点名与量程 (60~180mm) 都与平台参数一致.
+    # 备选是 vsp 内测距激光N, 但那是原始激光值, 还要减滑台内测距偏移才等于内侧距;
+    # 若现场发现 plc 值不对, 把这四行改成 ("vsp", "内测距激光N") 并补偏移逻辑.
+    "WheelDist1": ("plc", "车轮内侧距1"),
+    "WheelDist2": ("plc", "车轮内侧距2"),
+    "WheelDist3": ("plc", "车轮内侧距3"),
+    "WheelDist4": ("plc", "车轮内侧距4"),
+    # 轮重: plc (旧映射沿用)
+    "WW1": ("plc", "轮重测量1"),
+    "WW2": ("plc", "轮重测量2"),
+    "WW3": ("plc", "轮重测量3"),
+    "WW4": ("plc", "轮重测量4"),
 }
 
 
@@ -111,18 +130,18 @@ def _populate_element(parent: ET.Element, value: Any) -> None:
         parent.text = str(value)
 
 
-def _read_plc(name: str, default: float = 0.0) -> float:
-    """从 runtime.plc 读一个点位, 失败或缺失时返回 default."""
-    plc = get_runtime().get("plc")
-    if plc is None:
+def _read_point(source: str, name: str, default: float = 0.0) -> float:
+    """从指定数据源读一个点位 (source: plc/vsp/can), 失败或缺失时返回 default."""
+    table = get_runtime().get(source)
+    if table is None:
         return default
     try:
-        v = plc.read(name)
-        if v is None:
+        value = table.read(name)
+        if value is None:
             return default
-        return float(v)
+        return float(value)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("plc.read(%s) 失败: %s", name, exc)
+        logger.warning("%s.read(%s) 失败: %s", source, name, exc)
         return default
 
 
@@ -490,49 +509,65 @@ def emis(
 # ---------------------------------------------------------------------- #
 
 
+def _iot_state_values(wf: Any) -> dict[str, int]:
+    """工作 / 告警状态 (baseParameters 与 deviceSpecificParameters 共用).
+
+    规则: 流程执行中 workState=1, 否则 0; 流程故障 alarmState=1, 否则 0.
+    注意: 守卫触发急停只停硬件、不改流程状态, 所以 alarmState 只反映流程故障.
+    """
+    state = getattr(wf, "state", None) if wf is not None else None
+    return {
+        "workState": 1 if state == WorkflowState.RUNNING else 0,
+        "alarmState": 1 if state == WorkflowState.ERROR else 0,
+    }
+
+
 def _build_iot_payload(wf: Any, bed: dict, cfg: dict) -> dict:
-    """构造 iot 要推送的 JSON payload, 以及 mqtt 连接参数."""
+    """构造 iot 要推送的 JSON payload, 以及 mqtt 连接参数.
+
+    模板来自 push/config.json 的 iot.payload_status, 深拷贝后填充:
+    * ID 随机 UUID; URL/SYS_ID/deviceCode 取 bed.json 设备编号;
+      reportTime 取当前秒级时间戳 (与旧 data_demo 的 time 字段同口径);
+      model/productKey/flag 保留模板值.
+    * baseParameters / deviceSpecificParameters 按 itemCode 填充:
+      workState/alarmState 取流程状态, 其余查 _IOT_SOURCES 映射表读点,
+      映射为 none 或模板里没有的 code 保留原值.
+    """
     iot_cfg = cfg.get("iot", {})
-    data = copy.deepcopy(iot_cfg.get("data_demo", {}))
+    template = iot_cfg.get("payload_status")
+    if not isinstance(template, dict) or not template:
+        msg = "推送配置缺少 iot.payload_status, 无法构造 IoT 报文"
+        logger.error(msg)
+        raise RuntimeError(msg)
+    data = copy.deepcopy(template)
     device_code = bed.get("设备编号", "")
-    device_name = bed.get("设备名称", "")
 
-    data["device_id"] = device_code
-    data["device_name"] = device_name
-    data["time"] = str(int(time_module.time()))
+    data["ID"] = str(uuid.uuid4())
+    data["URL"] = str(data.get("URL", "")).replace("{bed.json->设备编号}", device_code)
+    data["SYS_ID"] = device_code
+    data["reportTime"] = str(int(time_module.time()))
+    data["deviceCode"] = device_code
 
-    meta = _get_meta(wf)
-    cur_node = getattr(wf, "cur_node", None) if wf is not None else None
-    cur_node_id = getattr(cur_node, "node_id", "") if cur_node is not None else ""
-
-    attr_info = data.get("attr_info", [])
-    for item in attr_info:
-        if not isinstance(item, dict):
-            continue
-        item["attr_time"] = data["time"]
-        attr_code = item.get("attr_code", "")
-
-        if attr_code in ("deviceStatus", "streamStatusName"):
-            item["attr_value"] = "忙碌"
-        elif attr_code == "streamStatus":
-            item["attr_value"] = cur_node_id
-        elif attr_code == "CrhModel":
-            item["attr_value"] = str(meta.get("车型", ""))
-        elif attr_code == "BogieSerialNo":
-            item["attr_value"] = str(meta.get("编号", ""))
-        elif attr_code == "BogiePosi":
-            item["attr_value"] = str(meta.get("车号", ""))
-        elif attr_code == "alarmCode":
-            # demo 中无 attr_value 字段, 这里清空
-            item.pop("attr_value", None)
-        elif attr_code in _IOT_PLC_KEYS:
-            item["attr_value"] = _read_plc(_IOT_PLC_KEYS[attr_code], 0.0)
-        # 其他未识别的 attr_code 保留 demo 原值
+    state_values = _iot_state_values(wf)
+    message = data.get("message") or {}
+    for key in ("baseParameters", "deviceSpecificParameters"):
+        items = message.get(key) or []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            code = item.get("itemCode", "")
+            if code in state_values:
+                item["itemValue"] = state_values[code]
+            elif code in _IOT_SOURCES:
+                source, point = _IOT_SOURCES[code]
+                if source != "none":
+                    item["itemValue"] = _read_point(source, point, 0.0)
+            # 未识别的 code 或 source 为 none: 保留模板原值
 
     return {
         "host": iot_cfg.get("host", ""),
         "port": int(iot_cfg.get("port", 1883) or 1883),
-        "client_id": device_code,
+        "client_id": str(iot_cfg.get("clientId") or device_code),
         "username": iot_cfg.get("username", ""),
         "password": iot_cfg.get("password", ""),
         "topic": iot_cfg.get("pub", ""),
